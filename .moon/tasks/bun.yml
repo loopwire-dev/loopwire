@@ -1,0 +1,11 @@
+tasks:
+  typecheck:
+    command: 'tsc --noEmit'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+
+  lint:
+    command: 'biome check .'
+    inputs:
+      - '@group(sources)'

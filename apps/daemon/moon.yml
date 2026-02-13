@@ -1,0 +1,21 @@
+language: rust
+stack: backend
+type: application
+
+fileGroups:
+  sources:
+    - 'crates/**/src/**/*'
+  configs:
+    - 'Cargo.toml'
+    - 'crates/*/Cargo.toml'
+
+tasks:
+  setup:
+    command: 'cargo install cargo-watch@8.5.3'
+    local: true
+
+  dev:
+    command: 'cargo watch -x "run --bin loopwired -- start"'
+    deps:
+      - 'setup'
+    local: true

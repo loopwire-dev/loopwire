@@ -1,0 +1,32 @@
+language: typescript
+stack: frontend
+type: application
+
+fileGroups:
+  sources:
+    - 'src/**/*'
+  configs:
+    - 'tsconfig.json'
+    - 'package.json'
+
+dependsOn:
+  - types
+
+tasks:
+  dev:
+    command: 'bunx --bun vite'
+    local: true
+
+  build:
+    command: 'bunx --bun vite build'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+      - 'index.html'
+      - 'vite.config.ts'
+    outputs:
+      - 'dist'
+
+  preview:
+    command: 'bunx --bun vite preview'
+    local: true

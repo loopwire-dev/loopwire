@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-surface: #ffffff;
+  --color-surface-raised: #f3f3f3;
+  --color-surface-overlay: #e8e8e8;
+  --color-sidebar: #f3f3f3;
+  --color-accent: #007acc;
+  --color-accent-hover: #006bb3;
+  --color-border: #e5e5e5;
+  --color-muted: #616161;
+}
+
+.dark {
+  --color-surface: #242424;
+  --color-surface-raised: #252526;
+  --color-surface-overlay: #2d2d30;
+  --color-sidebar: #1b1b1b;
+  --color-accent: #007acc;
+  --color-accent-hover: #1a85d6;
+  --color-border: #3c3c3c;
+  --color-muted: #c5c5c5;
+}
+
+body {
+  margin: 0;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+button:not(:disabled),
+a[href],
+summary,
+select:not(:disabled),
+label[for],
+[role="button"],
+[role="link"],
+[role="menuitem"],
+[tabindex]:not([tabindex="-1"]) {
+  cursor: pointer;
+}
+
+/* xterm.js overrides */
+.xterm {
+  padding: 8px;
+}
+
+.lw-dialog-overlay,
+.lw-dialog-content {
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.lw-dialog-overlay[data-state="open"],
+.lw-dialog-content[data-state="open"] {
+  opacity: 1;
+}
+
+.lw-dialog-overlay[data-state="closed"],
+.lw-dialog-content[data-state="closed"] {
+  pointer-events: none;
+}
+
+@keyframes icon-pop {
+  0% {
+    transform: scale(1.4);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-icon-pop {
+  display: inline-flex;
+  animation: icon-pop 200ms ease-out;
+}
+
+/* emoji-picker-react overrides */
+.EmojiPickerReact {
+  border-color: var(--color-border) !important;
+}
+
+.EmojiPickerReact .epr-search-container input {
+  border-radius: 8px !important;
+}
+
+.EmojiPickerReact .epr-header > :first-child {
+  padding-top: 10px !important;
+}

@@ -1,0 +1,70 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/loopwired",
+  "crates/lw-api",
+  "crates/lw-pty",
+  "crates/lw-agent",
+  "crates/lw-quota",
+  "crates/lw-fs",
+  "crates/lw-config",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Web framework
+axum = { version = "0.8", features = ["ws"] }
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+
+# PTY
+portable-pty = "0.8"
+
+# Filesystem watching
+notify = "7"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Database
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json"] }
+
+# Futures
+futures = "0.3"
+
+# Utilities
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+dirs = "5"
+toml = "0.8"
+anyhow = "1"
+thiserror = "2"
+rand = "0.8"
+sha2 = "0.10"
+hmac = "0.12"
+hex = "0.4"
+
+# Internal crates
+lw-api = { path = "crates/lw-api" }
+lw-pty = { path = "crates/lw-pty" }
+lw-agent = { path = "crates/lw-agent" }
+lw-quota = { path = "crates/lw-quota" }
+lw-fs = { path = "crates/lw-fs" }
+lw-config = { path = "crates/lw-config" }
