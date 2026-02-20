@@ -4,6 +4,9 @@ export interface HealthResponse {
   status: string;
   version: string;
   uptime_secs: number;
+  hostname: string;
+  os: string;
+  arch: string;
 }
 
 export interface BootstrapResponse {

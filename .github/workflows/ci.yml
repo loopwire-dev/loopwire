@@ -27,8 +27,10 @@ jobs:
       - run: bun install --frozen-lockfile
         working-directory: .
 
+      - run: bun run format:check
       - run: bun run typecheck
       - run: bun run lint
+      - run: bun run test
 
   types:
     name: Types Package
@@ -77,47 +79,3 @@ jobs:
 
       - name: Test
         run: cargo test --workspace
-
-  build-frontend:
-    name: Build Frontend
-    runs-on: ubuntu-latest
-    needs: [frontend, types]
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: "1.1.43"
-
-      - run: bun install --frozen-lockfile
-
-      - run: bun run build
-        working-directory: apps/web
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: web-dist
-          path: apps/web/dist
-
-  build-daemon:
-    name: Build Daemon
-    runs-on: ubuntu-latest
-    needs: [backend]
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "1.84.0"
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: apps/daemon
-
-      - run: cargo build --workspace --release
-        working-directory: apps/daemon
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: daemon-binary
-          path: apps/daemon/target/release/loopwired

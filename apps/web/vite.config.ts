@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -19,6 +20,21 @@ export default defineConfig({
         "../../packages/types/src",
         import.meta.url,
       ).pathname,
+    },
+  },
+  test: {
+    environment: "node",
+    setupFiles: ["./src/test-setup.ts"],
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "lcov", "html"],
+      reportsDirectory: "./coverage",
+      thresholds: {
+        lines: 1,
+        functions: 1,
+        branches: 1,
+        statements: 1,
+      },
     },
   },
 });

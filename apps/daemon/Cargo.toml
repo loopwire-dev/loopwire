@@ -5,7 +5,7 @@ members = [
   "crates/lw-api",
   "crates/lw-pty",
   "crates/lw-agent",
-  "crates/lw-quota",
+
   "crates/lw-fs",
   "crates/lw-config",
 ]
@@ -58,13 +58,15 @@ anyhow = "1"
 thiserror = "2"
 rand = "0.8"
 sha2 = "0.10"
-hmac = "0.12"
 hex = "0.4"
+mdns-sd = "0.11"
+hostname = "0.4"
+tempfile = "3"
 
 # Internal crates
 lw-api = { path = "crates/lw-api" }
 lw-pty = { path = "crates/lw-pty" }
 lw-agent = { path = "crates/lw-agent" }
-lw-quota = { path = "crates/lw-quota" }
+
 lw-fs = { path = "crates/lw-fs" }
 lw-config = { path = "crates/lw-config" }

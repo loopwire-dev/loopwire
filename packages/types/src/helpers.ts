@@ -1,5 +1,4 @@
 import type { AgentStatus, AgentType } from "./generated/agent";
-import type { SourceConfidence } from "./generated/quota";
 import type { ErrorCode } from "./generated/errors";
 
 export function agentDisplayName(type: AgentType): string {
@@ -11,6 +10,7 @@ export function agentDisplayName(type: AgentType): string {
     case "gemini":
       return "Gemini";
   }
+  return "Unknown Agent";
 }
 
 export function statusColor(
@@ -26,21 +26,7 @@ export function statusColor(
     case "stopped":
       return "gray";
   }
-}
-
-export function confidenceLabel(confidence: SourceConfidence): string {
-  switch (confidence) {
-    case "authoritative":
-      return "Verified";
-    case "estimated":
-      return "Estimated";
-  }
-}
-
-export function formatTokenCount(count: number): string {
-  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
-  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}k`;
-  return count.toString();
+  return "gray";
 }
 
 export function isErrorCode(code: string): code is ErrorCode {

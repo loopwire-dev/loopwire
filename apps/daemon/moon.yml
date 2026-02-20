@@ -1,6 +1,6 @@
 language: rust
 stack: backend
-type: application
+layer: application
 
 fileGroups:
   sources:
@@ -12,10 +12,28 @@ fileGroups:
 tasks:
   setup:
     command: 'cargo install cargo-watch@8.5.3'
-    local: true
+    preset: server
 
   dev:
-    command: 'cargo watch -x "run --bin loopwired -- start"'
+    script: 'cargo watch -x "run --bin loopwired -- start"'
     deps:
       - 'setup'
-    local: true
+    preset: server
+    options:
+      envFile: '/.env'
+
+  coverage:
+    command: 'cargo llvm-cov --workspace --lcov --output-path lcov.info --fail-under-lines 1'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+    outputs:
+      - 'lcov.info'
+
+  quality:
+    command: 'echo "daemon quality checks passed"'
+    deps:
+      - 'format'
+      - 'lint'
+      - 'check'
+      - 'test'

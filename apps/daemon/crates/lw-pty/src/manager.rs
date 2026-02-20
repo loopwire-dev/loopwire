@@ -31,20 +31,7 @@ impl PtyManager {
         let id = session.id;
         let session = Arc::new(session);
         self.sessions.write().await.insert(id, session.clone());
-        Ok(session)
-    }
-
-    pub async fn attach_tty(
-        &self,
-        session_id: Uuid,
-        tty_path: &Path,
-        cols: u16,
-        rows: u16,
-    ) -> Result<Arc<PtySession>, PtyError> {
-        let session = PtySession::attach_tty(session_id, tty_path, cols, rows)?;
-        let id = session.id;
-        let session = Arc::new(session);
-        self.sessions.write().await.insert(id, session.clone());
+        tracing::debug!(session_id = %id, "session added to manager");
         Ok(session)
     }
 
@@ -58,6 +45,7 @@ impl PtyManager {
     }
 
     pub async fn kill(&self, id: &Uuid) -> Result<(), PtyError> {
+        tracing::debug!(session_id = %id, "killing session");
         let session = self.get(id).await?;
         session.kill().await
     }
@@ -75,11 +63,28 @@ impl PtyManager {
             .collect()
     }
 
+    /// Removes all stopped sessions from the manager and returns their IDs.
+    pub async fn reap_stopped(&self) -> Vec<Uuid> {
+        let mut sessions = self.sessions.write().await;
+        let stopped_ids: Vec<Uuid> = sessions
+            .iter()
+            .filter(|(_, s)| s.is_stopped())
+            .map(|(id, _)| *id)
+            .collect();
+        for id in &stopped_ids {
+            sessions.remove(id);
+        }
+        tracing::debug!(count = stopped_ids.len(), "reaped stopped sessions");
+        stopped_ids
+    }
+
     pub async fn kill_all(&self) {
-        let sessions = self.sessions.read().await;
+        tracing::info!("killing all sessions");
+        let mut sessions = self.sessions.write().await;
         for session in sessions.values() {
             let _ = session.kill().await;
         }
+        sessions.clear();
     }
 }
 

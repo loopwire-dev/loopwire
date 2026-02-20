@@ -1,0 +1,26 @@
+id: root
+
+fileGroups:
+  sources:
+    - 'apps/**/*'
+    - 'packages/**/*'
+    - 'scripts/**/*'
+    - '.github/**/*'
+    - 'README.md'
+  configs:
+    - 'moon.yml'
+    - '.moon/**/*'
+    - 'package.json'
+
+tasks:
+  prepare-git-add:
+    command: 'echo "prepare complete"'
+    deps:
+      - 'types:generate'
+      - 'web:format'
+      - 'daemon:format'
+
+  git-add:
+    command: 'git add -A .'
+    deps:
+      - 'prepare-git-add'

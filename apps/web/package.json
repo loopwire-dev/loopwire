@@ -8,9 +8,17 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "lint": "biome check ."
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "format:check": "biome check --formatter-enabled=true --linter-enabled=false .",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "quality": "bun run format:check && bun run lint && bun run typecheck && bun run test",
+    "test:watch": "vitest"
   },
   "dependencies": {
+    "@fontsource/figtree": "^5.2.8",
+    "@fontsource/outfit": "^5.2.8",
     "@loopwire/types": "workspace:*",
     "@monaco-editor/react": "^4.7.0",
     "@radix-ui/react-dialog": "^1.1.4",
@@ -19,6 +27,7 @@
     "@uiw/react-color-chrome": "^2.9.5",
     "@uiw/react-color-circle": "^2.9.5",
     "@xterm/addon-fit": "^0.10.0",
+    "@xterm/addon-serialize": "^0.13.0",
     "@xterm/addon-web-links": "^0.11.0",
     "@xterm/addon-webgl": "^0.19.0",
     "@xterm/xterm": "^5.5.0",
@@ -28,21 +37,26 @@
     "next-themes": "^0.4.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-easy-crop": "^5.5.6",
+    "react-markdown": "^10.1.0",
     "react-resizable-panels": "^2.1.7",
     "react-router-dom": "^7.1.1",
+    "remark-gfm": "^4.0.1",
     "vscode-icons-js": "^11.6.1",
     "zustand": "^5.0.3"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
+    "@tailwindcss/vite": "^4.0.0",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/coverage-v8": "^4.0.18",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",
     "tailwindcss": "^4.0.0",
-    "@tailwindcss/vite": "^4.0.0",
     "typescript": "^5.7.3",
-    "vite": "^6.0.7"
+    "vite": "^6.0.7",
+    "vitest": "^4.0.18"
   }
 }

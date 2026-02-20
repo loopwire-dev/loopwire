@@ -16,22 +16,29 @@ export interface WsError {
 
 export type WsClientMessageType =
   | "pty:subscribe"
+  | "pty:history"
   | "pty:ready"
   | "pty:input"
   | "pty:resize"
   | "pty:unsubscribe"
   | "fs:watch"
-  | "fs:unwatch";
+  | "fs:unwatch"
+  | "git:subscribe"
+  | "git:unsubscribe";
 
 export type WsServerMessageType =
+  | "daemon:alive"
   | "pty:subscribed"
   | "pty:ready"
   | "pty:replay_start"
   | "pty:replay_end"
   | "pty:output"
+  | "pty:history"
   | "pty:exit"
+  | "agent:activity"
   | "fs:change"
-  | "quota:update"
+  | "git:status"
+
   | "error";
 
 export type WsMessageType = WsClientMessageType | WsServerMessageType;
@@ -43,6 +50,12 @@ export interface PtySubscribePayload {
 export interface PtyInputPayload {
   session_id: string;
   data: string;
+}
+
+export interface PtyHistoryRequestPayload {
+  session_id: string;
+  before?: number;
+  max_bytes?: number;
 }
 
 export interface PtyResizePayload {
@@ -58,6 +71,17 @@ export interface PtyOutputPayload {
 
 export interface PtyReplayBoundaryPayload {
   session_id: string;
+  start_offset?: number;
+  end_offset?: number;
+  has_more?: boolean;
+}
+
+export interface PtyHistoryPayload {
+  session_id: string;
+  data: string;
+  start_offset: number;
+  end_offset: number;
+  has_more: boolean;
 }
 
 export interface PtyExitPayload {
@@ -65,17 +89,29 @@ export interface PtyExitPayload {
   exit_code: number | null;
 }
 
+export interface DaemonAlivePayload {
+  ts_ms: number;
+}
+
+export interface AgentActivityPayload {
+  session_id: string;
+  activity: {
+    phase: "unknown" | "awaiting_user" | "processing" | "streaming_output";
+    is_idle: boolean;
+    updated_at: string;
+    last_input_at: string | null;
+    last_output_at: string | null;
+    reason: string;
+  };
+}
+
 export interface FsChangePayload {
   event: "create" | "modify" | "delete" | "rename";
   path: string;
 }
 
-export interface QuotaUpdatePayload {
-  session_id: string;
-  usage: {
-    tokens_in: number;
-    tokens_out: number;
-    cost_usd: number | null;
-    source_confidence: "authoritative" | "estimated";
-  };
+export interface GitStatusPayload {
+  workspace_id: string;
+  files: Record<string, { status: string; additions?: number; deletions?: number }>;
+  ignored_dirs: string[];
 }

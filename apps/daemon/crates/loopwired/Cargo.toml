@@ -3,6 +3,10 @@ name = "loopwired"
 version.workspace = true
 edition.workspace = true
 
+[lib]
+name = "loopwired"
+path = "src/lib.rs"
+
 [[bin]]
 name = "loopwired"
 path = "src/main.rs"
@@ -17,8 +21,14 @@ tracing-subscriber.workspace = true
 anyhow.workspace = true
 dirs.workspace = true
 serde_json.workspace = true
+serde.workspace = true
 reqwest.workspace = true
 axum.workspace = true
+mdns-sd.workspace = true
+hostname.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+[dev-dependencies]
+tempfile = "3"

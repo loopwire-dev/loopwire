@@ -1,0 +1,41 @@
+name: Pre-commit
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  run-prek:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.1.43"
+
+      - run: bun install --frozen-lockfile
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.84.0"
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/daemon
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: prek
+
+      - name: Run pre-commit checks
+        run: prek run --all-files
+
+      - name: Run pre-push checks
+        run: prek run --hook-stage pre-push --all-files

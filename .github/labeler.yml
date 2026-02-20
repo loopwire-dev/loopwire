@@ -1,0 +1,30 @@
+frontend:
+  - changed-files:
+      - any-glob-to-any-file:
+          - apps/web/**
+
+backend:
+  - changed-files:
+      - any-glob-to-any-file:
+          - apps/daemon/**
+
+types:
+  - changed-files:
+      - any-glob-to-any-file:
+          - packages/types/**
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - .github/workflows/**
+
+scripts:
+  - changed-files:
+      - any-glob-to-any-file:
+          - scripts/**
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - README.md
+          - '**/*.md'

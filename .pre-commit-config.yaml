@@ -1,0 +1,97 @@
+minimum_pre_commit_version: "3.0.0"
+default_stages: [pre-commit]
+default_install_hook_types: [pre-commit, pre-push]
+exclude: ^(apps/web/(coverage|dist|node_modules)/|apps/daemon/target/|packages/types/node_modules/|apps/web/tsconfig\.tsbuildinfo$)
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+
+  - repo: local
+    hooks:
+      - id: web-format-write
+        name: web format (Biome auto-fix)
+        entry: bash -lc 'cd apps/web && bun run format'
+        language: system
+        pass_filenames: false
+        files: ^apps/web/
+
+      - id: web-format-check
+        name: web format check (Biome)
+        entry: bash -lc 'cd apps/web && bun run format:check'
+        language: system
+        pass_filenames: false
+        files: ^apps/web/
+
+      - id: web-lint
+        name: web lint (Biome)
+        entry: bash -lc 'cd apps/web && bun run lint'
+        language: system
+        pass_filenames: false
+        files: ^apps/web/
+
+      - id: web-typecheck
+        name: web typecheck
+        entry: bash -lc 'cd apps/web && bun run typecheck'
+        language: system
+        pass_filenames: false
+        files: ^(apps/web/|packages/types/)
+
+      - id: types-typecheck
+        name: shared types typecheck
+        entry: bash -lc 'cd packages/types && bun run typecheck'
+        language: system
+        pass_filenames: false
+        files: ^packages/types/
+
+      - id: rust-format-write
+        name: rust format (auto-fix)
+        entry: bash -lc 'cd apps/daemon && cargo fmt --all'
+        language: system
+        pass_filenames: false
+        files: ^apps/daemon/
+
+      - id: rust-format-check
+        name: rust format check
+        entry: bash -lc 'cd apps/daemon && cargo fmt --all -- --check'
+        language: system
+        pass_filenames: false
+        files: ^apps/daemon/
+
+      - id: rust-lint
+        name: rust clippy
+        entry: bash -lc 'cd apps/daemon && cargo clippy --workspace -- -D warnings'
+        language: system
+        pass_filenames: false
+        files: ^apps/daemon/
+
+      - id: rust-check
+        name: rust check
+        entry: bash -lc 'cd apps/daemon && cargo check --workspace'
+        language: system
+        pass_filenames: false
+        files: ^apps/daemon/
+
+      - id: web-tests
+        name: web tests
+        entry: bash -lc 'cd apps/web && bun run test'
+        language: system
+        pass_filenames: false
+        files: ^apps/web/
+        stages: [pre-push]
+
+      - id: rust-tests
+        name: rust tests
+        entry: bash -lc 'cd apps/daemon && cargo test --workspace'
+        language: system
+        pass_filenames: false
+        files: ^apps/daemon/
+        stages: [pre-push]

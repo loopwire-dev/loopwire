@@ -2,7 +2,7 @@ use axum::extract::Request;
 use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::Response;
-use lw_config::DaemonConfig;
+use lw_config::ConfigPaths;
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -13,14 +13,16 @@ use crate::error::{ApiError, ApiErrorResponse};
 pub struct TokenStore {
     bootstrap_token_hash: RwLock<Option<String>>,
     session_token_hashes: Arc<RwLock<HashSet<String>>>,
+    paths: ConfigPaths,
 }
 
 impl TokenStore {
-    pub fn new(bootstrap_token_hash: String) -> Self {
-        let sessions = load_session_hashes();
+    pub fn new(bootstrap_token_hash: String, paths: ConfigPaths) -> Self {
+        let sessions = load_session_hashes(&paths);
         Self {
             bootstrap_token_hash: RwLock::new(Some(bootstrap_token_hash)),
             session_token_hashes: Arc::new(RwLock::new(sessions)),
+            paths,
         }
     }
 
@@ -84,15 +86,15 @@ impl TokenStore {
     async fn persist_sessions(&self) {
         let hashes = self.session_token_hashes.read().await;
         let content = hashes.iter().cloned().collect::<Vec<_>>().join("\n");
-        let path = DaemonConfig::sessions_path();
+        let path = self.paths.sessions_path();
         if let Err(e) = std::fs::write(&path, content) {
             tracing::warn!("Failed to persist session hashes: {}", e);
         }
     }
 }
 
-fn load_session_hashes() -> HashSet<String> {
-    let path = DaemonConfig::sessions_path();
+fn load_session_hashes(paths: &ConfigPaths) -> HashSet<String> {
+    let path = paths.sessions_path();
     match std::fs::read_to_string(&path) {
         Ok(content) => content
             .lines()
@@ -104,8 +106,8 @@ fn load_session_hashes() -> HashSet<String> {
 }
 
 /// Load or generate a bootstrap token. Returns (plaintext_token, hash).
-pub fn load_or_create_bootstrap_token() -> (String, String) {
-    let path = DaemonConfig::token_path();
+pub fn load_or_create_bootstrap_token(paths: &ConfigPaths) -> (String, String) {
+    let path = paths.token_path();
     if let Ok(existing) = std::fs::read_to_string(&path) {
         let token = existing.trim().to_string();
         if !token.is_empty() {
@@ -120,26 +122,30 @@ pub fn load_or_create_bootstrap_token() -> (String, String) {
 }
 
 /// Generate a new bootstrap token, overwriting any existing one.
-pub fn regenerate_bootstrap_token() -> String {
+pub fn regenerate_bootstrap_token(paths: &ConfigPaths) -> String {
     let token = generate_token();
-    let path = DaemonConfig::token_path();
+    let path = paths.token_path();
     let _ = std::fs::write(&path, &token);
     token
 }
 
-fn generate_token() -> String {
+pub fn generate_token() -> String {
     use rand::Rng;
     let mut rng = rand::thread_rng();
     let bytes: Vec<u8> = (0..32).map(|_| rng.gen()).collect();
     hex::encode(bytes)
 }
 
-pub fn extract_bearer_token(req: &Request) -> Option<String> {
-    req.headers()
+pub fn extract_bearer_from_headers(headers: &axum::http::HeaderMap) -> Option<String> {
+    headers
         .get("authorization")
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.strip_prefix("Bearer "))
         .map(|s| s.to_string())
+}
+
+pub fn extract_bearer_token(req: &Request) -> Option<String> {
+    extract_bearer_from_headers(req.headers())
 }
 
 pub async fn auth_middleware(
@@ -160,4 +166,134 @@ pub async fn auth_middleware(
     }
 
     Ok(next.run(req).await)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::HeaderMap;
+
+    #[test]
+    fn hash_token_deterministic() {
+        let h1 = TokenStore::hash_token("test");
+        let h2 = TokenStore::hash_token("test");
+        assert_eq!(h1, h2);
+    }
+
+    #[test]
+    fn hash_token_known_vector() {
+        // SHA-256 of "test"
+        let hash = TokenStore::hash_token("test");
+        assert_eq!(
+            hash,
+            "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+        );
+    }
+
+    #[test]
+    fn generate_token_length_and_hex() {
+        let token = generate_token();
+        assert_eq!(token.len(), 64); // 32 bytes = 64 hex chars
+        assert!(token.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn generate_token_unique() {
+        let t1 = generate_token();
+        let t2 = generate_token();
+        assert_ne!(t1, t2);
+    }
+
+    #[test]
+    fn extract_bearer_from_headers_valid() {
+        let mut headers = HeaderMap::new();
+        headers.insert("authorization", "Bearer my-token".parse().unwrap());
+        assert_eq!(
+            extract_bearer_from_headers(&headers),
+            Some("my-token".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_bearer_from_headers_missing() {
+        let headers = HeaderMap::new();
+        assert_eq!(extract_bearer_from_headers(&headers), None);
+    }
+
+    #[test]
+    fn extract_bearer_from_headers_malformed() {
+        let mut headers = HeaderMap::new();
+        headers.insert("authorization", "Basic abc123".parse().unwrap());
+        assert_eq!(extract_bearer_from_headers(&headers), None);
+    }
+
+    #[test]
+    fn extract_bearer_token_from_request() {
+        let req = Request::builder()
+            .header("authorization", "Bearer req-token")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        assert_eq!(extract_bearer_token(&req), Some("req-token".to_string()));
+    }
+
+    #[test]
+    fn extract_bearer_token_missing_header() {
+        let req = Request::builder().body(axum::body::Body::empty()).unwrap();
+        assert_eq!(extract_bearer_token(&req), None);
+    }
+
+    fn make_token_store() -> (tempfile::TempDir, TokenStore) {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = ConfigPaths::with_base(dir.path().to_path_buf());
+        std::fs::create_dir_all(dir.path()).unwrap();
+        let bootstrap_hash = TokenStore::hash_token("bootstrap-secret");
+        let store = TokenStore::new(bootstrap_hash, paths);
+        (dir, store)
+    }
+
+    #[tokio::test]
+    async fn bootstrap_validate_and_consume_lifecycle() {
+        let (_dir, store) = make_token_store();
+        assert!(store.validate_bootstrap("bootstrap-secret").await);
+        assert!(store.consume_bootstrap().await);
+        // Second consume fails
+        assert!(!store.consume_bootstrap().await);
+    }
+
+    #[tokio::test]
+    async fn session_add_validate_revoke_lifecycle() {
+        let (_dir, store) = make_token_store();
+        let token = "session-token-123";
+        let hash = TokenStore::hash_token(token);
+        store.add_session_token(hash).await;
+        assert!(store.validate_session(token).await);
+        assert!(store.revoke_session(token).await);
+        assert!(!store.validate_session(token).await);
+    }
+
+    #[tokio::test]
+    async fn rotate_session_removes_old_hash() {
+        let (_dir, store) = make_token_store();
+        let old_token = "old-token";
+        let old_hash = TokenStore::hash_token(old_token);
+        store.add_session_token(old_hash).await;
+        assert!(store.validate_session(old_token).await);
+        let result = store.rotate_session(old_token).await;
+        assert!(result.is_some());
+        assert!(!store.validate_session(old_token).await);
+    }
+
+    #[tokio::test]
+    async fn rotate_session_nonexistent_returns_none() {
+        let (_dir, store) = make_token_store();
+        let result = store.rotate_session("nonexistent-token").await;
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn consumed_bootstrap_rejects_validation() {
+        let (_dir, store) = make_token_store();
+        store.consume_bootstrap().await;
+        assert!(!store.validate_bootstrap("bootstrap-secret").await);
+    }
 }

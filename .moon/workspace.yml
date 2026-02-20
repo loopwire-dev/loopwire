@@ -1,8 +1,9 @@
 projects:
-  - 'apps/*'
-  - 'packages/*'
+  - '.'
+  - 'apps/*/moon.yml'
+  - 'packages/*/moon.yml'
 
 vcs:
-  manager: git
+  client: git
   provider: github
   defaultBranch: main

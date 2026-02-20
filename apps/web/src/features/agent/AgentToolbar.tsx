@@ -12,7 +12,7 @@ export function AgentToolbar({ session }: AgentToolbarProps) {
 
 	const stopAgent = async () => {
 		try {
-			await stopSession(session.sessionId, session.workspacePath);
+			await stopSession(session.sessionId);
 		} catch {
 			// Best effort
 		}

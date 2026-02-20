@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod error;
+pub mod remote;
 pub mod rest;
 pub mod router;
 pub mod state;

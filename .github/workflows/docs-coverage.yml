@@ -1,0 +1,66 @@
+name: Docs Coverage
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  docs-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check README coverage for key directories
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          targets=(
+            ".github"
+            "apps"
+            "apps/web"
+            "apps/daemon"
+            "apps/daemon/crates"
+            "packages"
+            "packages/types"
+            "scripts"
+          )
+
+          total=${#targets[@]}
+          documented=0
+          missing=()
+
+          for dir in "${targets[@]}"; do
+            if [[ -f "$dir/README.md" ]]; then
+              documented=$((documented + 1))
+            else
+              missing+=("$dir/README.md")
+            fi
+          done
+
+          coverage=$(( documented * 100 / total ))
+          echo "Docs coverage: ${documented}/${total} (${coverage}%)"
+
+          {
+            echo "## Docs Coverage"
+            echo ""
+            echo "- Coverage: **${documented}/${total} (${coverage}%)**"
+            if (( ${#missing[@]} > 0 )); then
+              echo ""
+              echo "### Missing READMEs"
+              for item in "${missing[@]}"; do
+                echo "- \`${item}\`"
+              done
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Keep docs coverage strict for key project areas.
+          if (( coverage < 100 )); then
+            echo "Docs coverage below required threshold (100%)."
+            exit 1
+          fi

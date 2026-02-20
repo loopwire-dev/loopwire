@@ -1,7 +1,8 @@
 import { useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Pencil, Pin, PinOff, Smile, Trash2 } from "lucide-react";
+import { Pencil, Pin, PinOff, Smile } from "lucide-react";
 import type { WorkspaceRoot } from "../../shared/stores/app-store";
+import { SlideDeleteButton } from "../../shared/ui/SlideDeleteButton";
 
 interface WorkspaceContextMenuProps {
 	root: WorkspaceRoot;
@@ -34,7 +35,7 @@ export function WorkspaceContextMenu({
 	return createPortal(
 		<div
 			data-workspace-menu="true"
-			className="fixed z-50 flex flex-col rounded-lg border border-border bg-surface shadow-xl py-1.5 pl-1.5 pr-4"
+			className="fixed z-50 w-52 flex flex-col rounded-lg border border-border bg-surface shadow-xl p-1.5"
 			style={{ top: pos.top, left: pos.left }}
 		>
 			<button
@@ -43,7 +44,7 @@ export function WorkspaceContextMenu({
 					event.stopPropagation();
 					onTogglePin();
 				}}
-				className="inline-flex items-center gap-2 text-left px-2.5 py-2 text-sm rounded-md hover:bg-surface-overlay transition-colors whitespace-nowrap"
+				className="inline-flex w-full items-center gap-2 text-left px-2.5 py-2 text-sm rounded-md hover:bg-surface-overlay transition-colors whitespace-nowrap"
 			>
 				{root.pinned ? (
 					<PinOff aria-hidden="true" size={14} />
@@ -58,7 +59,7 @@ export function WorkspaceContextMenu({
 					event.stopPropagation();
 					onRename();
 				}}
-				className="inline-flex items-center gap-2 text-left px-2.5 py-2 text-sm rounded-md hover:bg-surface-overlay transition-colors whitespace-nowrap"
+				className="inline-flex w-full items-center gap-2 text-left px-2.5 py-2 text-sm rounded-md hover:bg-surface-overlay transition-colors whitespace-nowrap"
 			>
 				<Pencil aria-hidden="true" size={14} />
 				Rename
@@ -69,22 +70,12 @@ export function WorkspaceContextMenu({
 					event.stopPropagation();
 					onSetIcon();
 				}}
-				className="inline-flex items-center gap-2 text-left px-2.5 py-2 text-sm rounded-md hover:bg-surface-overlay transition-colors whitespace-nowrap"
+				className="inline-flex w-full items-center gap-2 text-left px-2.5 py-2 text-sm rounded-md hover:bg-surface-overlay transition-colors whitespace-nowrap"
 			>
 				<Smile aria-hidden="true" size={14} />
 				Set Icon
 			</button>
-			<button
-				type="button"
-				onClick={(event) => {
-					event.stopPropagation();
-					onDelete();
-				}}
-				className="inline-flex items-center gap-2 text-left px-2.5 py-2 text-sm rounded-md text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors whitespace-nowrap"
-			>
-				<Trash2 aria-hidden="true" size={14} />
-				Delete
-			</button>
+			<SlideDeleteButton onDelete={onDelete} />
 		</div>,
 		document.body,
 	);

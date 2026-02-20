@@ -1,4 +1,4 @@
-import { WS_URL } from "./config";
+import { getWsUrl } from "./config";
 import { useAppStore } from "../stores/app-store";
 
 export interface WsEnvelope {
@@ -45,7 +45,7 @@ class WsClient {
       this.ws = null;
     }
 
-    const url = `${WS_URL}?token=${encodeURIComponent(token)}`;
+    const url = `${getWsUrl()}?token=${encodeURIComponent(token)}`;
     console.debug("[ws] connecting to", url.replace(/token=.*/, "token=***"));
     const ws = new WebSocket(url);
     this.ws = ws;

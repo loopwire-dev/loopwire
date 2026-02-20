@@ -1,16 +1,14 @@
 import { create } from "zustand";
 
-export interface QuotaData {
-	session_id: string;
+export interface AvailableAgent {
 	agent_type: string;
-	tokens_in: number;
-	tokens_out: number;
-	cost_usd: number | null;
-	source: string;
-	source_confidence: "authoritative" | "estimated";
+	name: string;
+	installed: boolean;
+	version: string | null;
 }
 
 export interface WorkspaceRoot {
+	id?: string;
 	path: string;
 	name: string;
 	pinned: boolean;
@@ -21,10 +19,47 @@ export interface WorkspaceSession {
 	sessionId: string;
 	agentType: string;
 	customName?: string | null;
+	workspaceId?: string | null;
+	pinned?: boolean;
+	icon?: string | null;
+	sortOrder?: number | null;
 	status: string;
-	workspacePath: string;
+	resumeFailureReason?: string | null;
 	createdAt: string;
+	activity?: AgentActivity;
 }
+
+export type AgentActivityPhase =
+	| "unknown"
+	| "awaiting_user"
+	| "user_input"
+	| "processing"
+	| "streaming_output";
+
+export interface AgentActivity {
+	phase: AgentActivityPhase;
+	is_idle: boolean;
+	updated_at: string;
+	last_input_at: string | null;
+	last_output_at: string | null;
+	reason: string;
+}
+
+export function defaultAgentActivity(): AgentActivity {
+	return {
+		phase: "unknown",
+		is_idle: false,
+		updated_at: new Date().toISOString(),
+		last_input_at: null,
+		last_output_at: null,
+		reason: "frontend_default",
+	};
+}
+
+export type WorkspacePanel =
+	| { kind: "panel"; panel: "files" | "git" }
+	| { kind: "agent"; sessionId: string }
+	| { kind: "new-agent" };
 
 const TOKEN_KEY = "loopwire_token";
 const WORKSPACES_KEY = "loopwire_workspaces";
@@ -46,37 +81,61 @@ function normalizeWorkspacePath(path: string): string {
 	return path === "/" ? "/" : path.replace(/\/+$/, "");
 }
 
+function normalizeWorkspaceId(workspaceId: string | null | undefined): string | null {
+	if (typeof workspaceId !== "string") return null;
+	const trimmed = workspaceId.trim();
+	return trimmed || null;
+}
+
+function workspaceStoreKey(workspaceId: string | null | undefined): string | null {
+	const normalizedId = normalizeWorkspaceId(workspaceId);
+	if (normalizedId) return `id:${normalizedId}`;
+	return null;
+}
+
+function resolveWorkspaceStoreKeyFromPath(
+	workspacePath: string,
+	roots: WorkspaceRoot[],
+): string | null {
+	const normalizedPath = normalizeWorkspacePath(workspacePath);
+	const matchedRoot = roots.find(
+		(root) => normalizeWorkspacePath(root.path) === normalizedPath,
+	);
+	return workspaceStoreKey(matchedRoot?.id ?? null);
+}
+
+export function workspaceStoreKeyForSelection(
+	workspaceId: string | null | undefined,
+	_workspacePath: string | null | undefined,
+): string | null {
+	return workspaceStoreKey(workspaceId);
+}
+
 function normalizeWorkspaceIcon(icon: string | null | undefined): string | null {
 	if (typeof icon !== "string") return null;
 	const trimmed = icon.trim();
 	if (!trimmed) return null;
+	if (/^data:image\//i.test(trimmed)) {
+		return trimmed;
+	}
 	if (/^:[a-z0-9_+-]{1,64}:$/i.test(trimmed)) {
 		return trimmed.toLowerCase();
 	}
 	return [...trimmed].slice(0, 2).join("");
 }
 
-function mergeSessionsForNormalizedPath(
+function mergeSessionsForWorkspaceKey(
 	sessionsByWorkspacePath: Record<string, WorkspaceSession[]>,
-	normalizedPath: string,
+	workspaceKey: string,
 ): WorkspaceSession[] {
-	const merged: WorkspaceSession[] = [];
-	for (const [path, sessions] of Object.entries(sessionsByWorkspacePath)) {
-		if (normalizeWorkspacePath(path) !== normalizedPath) continue;
-		merged.push(...sessions);
-	}
-	return normalizeWorkspaceSessions(merged);
+	return normalizeWorkspaceSessions(sessionsByWorkspacePath[workspaceKey] ?? []);
 }
 
-function findActiveSessionIdForNormalizedPath(
+function findActiveSessionIdForWorkspaceKey(
 	activeByWorkspacePath: Record<string, string | null>,
-	normalizedPath: string,
+	workspaceKey: string,
 ): string | null {
-	for (const [path, sessionId] of Object.entries(activeByWorkspacePath)) {
-		if (normalizeWorkspacePath(path) !== normalizedPath) continue;
-		if (sessionId) return sessionId;
-	}
-	return null;
+	return activeByWorkspacePath[workspaceKey] ?? null;
 }
 
 function normalizeWorkspaceRoots(roots: WorkspaceRoot[]): WorkspaceRoot[] {
@@ -85,6 +144,7 @@ function normalizeWorkspaceRoots(roots: WorkspaceRoot[]): WorkspaceRoot[] {
 		if (!root?.path) continue;
 		if (unique.has(root.path)) continue;
 		unique.set(root.path, {
+			id: root.id,
 			path: root.path,
 			name: root.name?.trim() || defaultWorkspaceName(root.path),
 			pinned: Boolean(root.pinned),
@@ -97,20 +157,31 @@ function normalizeWorkspaceRoots(roots: WorkspaceRoot[]): WorkspaceRoot[] {
 	return [...pinned, ...unpinned];
 }
 
+function isActiveStatus(status: string): boolean {
+	return status === "running" || status === "restored";
+}
+
 function normalizeWorkspaceSessions(
 	sessions: WorkspaceSession[],
 ): WorkspaceSession[] {
 	const unique = new Map<string, WorkspaceSession>();
 	for (const session of sessions) {
-		if (!session.sessionId || session.status !== "running") continue;
+		if (!session.sessionId || !isActiveStatus(session.status)) continue;
 		const customName =
 			typeof session.customName === "string" ? session.customName.trim() : "";
+		const normalizedWorkspaceId = normalizeWorkspaceId(session.workspaceId);
 		unique.set(session.sessionId, {
 			...session,
 			customName: customName || null,
+			workspaceId: normalizedWorkspaceId,
+			sortOrder: session.sortOrder ?? null,
+			activity: session.activity ?? defaultAgentActivity(),
 		});
 	}
-	return [...unique.values()];
+	const all = [...unique.values()];
+	const pinned = all.filter((s) => s.pinned);
+	const unpinned = all.filter((s) => !s.pinned);
+	return [...pinned, ...unpinned];
 }
 
 function loadWorkspaceRoots(): WorkspaceRoot[] {
@@ -136,6 +207,10 @@ function loadWorkspaceRoots(): WorkspaceRoot[] {
 							typeof entry.path === "string"
 						) {
 							return {
+								id:
+									"id" in entry && typeof entry.id === "string"
+										? entry.id
+										: undefined,
 								path: entry.path,
 								name:
 									"name" in entry && typeof entry.name === "string"
@@ -205,7 +280,7 @@ export interface AppState {
 	settingsOpen: boolean;
 	setSettingsOpen: (v: boolean) => void;
 
-	// Agent sessions scoped by workspace
+	// Agent sessions scoped by workspace key (`id:<workspace_id>` preferred)
 	sessionsByWorkspacePath: Record<string, WorkspaceSession[]>;
 	activeSessionIdByWorkspacePath: Record<string, string | null>;
 	setWorkspaceSessions: (path: string, sessions: WorkspaceSession[]) => void;
@@ -217,20 +292,31 @@ export interface AppState {
 		toSessionId: string,
 	) => void;
 	renameSessionCustomName: (sessionId: string, customName: string | null) => void;
-	removeWorkspaceSession: (workspacePath: string, sessionId: string) => void;
+	updateSessionSettings: (sessionId: string, settings: { pinned?: boolean; icon?: string | null; sortOrder?: number | null }) => void;
+	updateSessionActivity: (sessionId: string, activity: AgentActivity) => void;
+	removeWorkspaceSession: (sessionId: string) => void;
 	removeSessionById: (sessionId: string) => void;
-	attachWorkspaceSession: (workspacePath: string, sessionId: string | null) => void;
+	attachWorkspaceSession: (
+		workspacePath: string,
+		sessionId: string | null,
+		workspaceId?: string | null,
+	) => void;
 	clearAllSessions: () => void;
+
+	// Workspace panels
+	activePanelByWorkspacePath: Record<string, WorkspacePanel>;
+	setActivePanel: (workspacePath: string, panel: WorkspacePanel) => void;
+
+	// Available agents
+	availableAgents: AvailableAgent[];
+	setAvailableAgents: (agents: AvailableAgent[]) => void;
 
 	// Editor
 	openFilePath: string | null;
 	openFileContent: string | null;
-	setOpenFile: (path: string, content: string) => void;
+	openFileImageSrc: string | null;
+	setOpenFile: (path: string, content: string | null, imageSrc?: string | null) => void;
 	clearOpenFile: () => void;
-
-	// Quota
-	quotaData: QuotaData[];
-	setQuotaData: (data: QuotaData[]) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -253,7 +339,8 @@ export const useAppStore = create<AppState>((set) => ({
 			workspaceId: null,
 			openFilePath: null,
 			openFileContent: null,
-			quotaData: [],
+			openFileImageSrc: null,
+
 			browsingForWorkspace: false,
 			settingsOpen: false,
 		});
@@ -271,7 +358,8 @@ export const useAppStore = create<AppState>((set) => ({
 			workspaceId: null,
 			openFilePath: null,
 			openFileContent: null,
-			quotaData: [],
+			openFileImageSrc: null,
+
 		}),
 	clearWorkspace: () =>
 		set({
@@ -279,7 +367,8 @@ export const useAppStore = create<AppState>((set) => ({
 			workspaceId: null,
 			openFilePath: null,
 			openFileContent: null,
-			quotaData: [],
+			openFileImageSrc: null,
+
 		}),
 
 	workspaceRoots: loadWorkspaceRoots(),
@@ -389,6 +478,7 @@ export const useAppStore = create<AppState>((set) => ({
 			// Backend is the sole source of truth.
 			const roots = normalizeWorkspaceRoots(
 				entries.map((entry) => ({
+					id: entry.id,
 					path: entry.path,
 					name: entry.name?.trim() || defaultWorkspaceName(entry.path),
 					pinned: Boolean(entry.pinned),
@@ -411,39 +501,48 @@ export const useAppStore = create<AppState>((set) => ({
 	settingsOpen: false,
 	setSettingsOpen: (v) => set({ settingsOpen: v }),
 
+	activePanelByWorkspacePath: {},
+	setActivePanel: (workspacePath, panel) =>
+		set((state) => {
+			const workspaceKey = resolveWorkspaceStoreKeyFromPath(
+				workspacePath,
+				state.workspaceRoots,
+			);
+			if (!workspaceKey) return state;
+			return {
+				activePanelByWorkspacePath: {
+					...state.activePanelByWorkspacePath,
+					[workspaceKey]: panel,
+				},
+			};
+		}),
+
 	sessionsByWorkspacePath: {},
 	activeSessionIdByWorkspacePath: {},
 	setWorkspaceSessions: (path, sessions) =>
 		set((state) => {
-			const normalizedPath = normalizeWorkspacePath(path);
 			const normalized = normalizeWorkspaceSessions(sessions);
+			const workspaceKey =
+				workspaceStoreKey(normalized[0]?.workspaceId ?? null) ??
+				resolveWorkspaceStoreKeyFromPath(path, state.workspaceRoots);
+			if (!workspaceKey) return state;
 			const nextSessionsByWorkspacePath = {
 				...state.sessionsByWorkspacePath,
 			};
-			for (const existingPath of Object.keys(nextSessionsByWorkspacePath)) {
-				if (normalizeWorkspacePath(existingPath) === normalizedPath) {
-					delete nextSessionsByWorkspacePath[existingPath];
-				}
-			}
-			nextSessionsByWorkspacePath[normalizedPath] = normalized;
+			nextSessionsByWorkspacePath[workspaceKey] = normalized;
 
 			const nextActive = {
 				...state.activeSessionIdByWorkspacePath,
 			};
-			for (const existingPath of Object.keys(nextActive)) {
-				if (normalizeWorkspacePath(existingPath) === normalizedPath) {
-					delete nextActive[existingPath];
-				}
-			}
 			const activeSessionId =
-				findActiveSessionIdForNormalizedPath(
+				findActiveSessionIdForWorkspaceKey(
 					state.activeSessionIdByWorkspacePath,
-					normalizedPath,
+					workspaceKey,
 				) ?? null;
 			const activeStillExists = normalized.some(
 				(session) => session.sessionId === activeSessionId,
 			);
-			nextActive[normalizedPath] = activeStillExists ? activeSessionId : null;
+			nextActive[workspaceKey] = activeStillExists ? activeSessionId : null;
 
 			return {
 				sessionsByWorkspacePath: nextSessionsByWorkspacePath,
@@ -454,8 +553,9 @@ export const useAppStore = create<AppState>((set) => ({
 		set(() => {
 			const grouped = sessions.reduce<Record<string, WorkspaceSession[]>>(
 				(acc, session) => {
-					if (session.status !== "running") return acc;
-					const key = normalizeWorkspacePath(session.workspacePath);
+					if (!isActiveStatus(session.status)) return acc;
+					const key = workspaceStoreKey(session.workspaceId ?? null);
+					if (!key) return acc;
 					const list = acc[key] ?? [];
 					list.push(session);
 					acc[key] = list;
@@ -486,28 +586,24 @@ export const useAppStore = create<AppState>((set) => ({
 		}),
 	upsertWorkspaceSession: (session) =>
 		set((state) => {
-			if (session.status !== "running") {
+			if (!isActiveStatus(session.status)) {
 				return state;
 			}
-			const normalizedPath = normalizeWorkspacePath(session.workspacePath);
-			const existing = mergeSessionsForNormalizedPath(
+			const workspaceKey = workspaceStoreKey(session.workspaceId ?? null);
+			if (!workspaceKey) return state;
+			const existing = mergeSessionsForWorkspaceKey(
 				state.sessionsByWorkspacePath,
-				normalizedPath,
+				workspaceKey,
 			);
 			const filtered = existing.filter((s) => s.sessionId !== session.sessionId);
 			const nextSessions = normalizeWorkspaceSessions([
 				...filtered,
-				{ ...session, workspacePath: normalizedPath },
+				session,
 			]);
 			const nextSessionsByWorkspacePath = {
 				...state.sessionsByWorkspacePath,
 			};
-			for (const existingPath of Object.keys(nextSessionsByWorkspacePath)) {
-				if (normalizeWorkspacePath(existingPath) === normalizedPath) {
-					delete nextSessionsByWorkspacePath[existingPath];
-				}
-			}
-			nextSessionsByWorkspacePath[normalizedPath] = nextSessions;
+			nextSessionsByWorkspacePath[workspaceKey] = nextSessions;
 			return {
 				sessionsByWorkspacePath: nextSessionsByWorkspacePath,
 			};
@@ -515,10 +611,14 @@ export const useAppStore = create<AppState>((set) => ({
 	reorderWorkspaceSession: (workspacePath, fromSessionId, toSessionId) =>
 		set((state) => {
 			if (fromSessionId === toSessionId) return state;
-			const normalizedPath = normalizeWorkspacePath(workspacePath);
-			const current = mergeSessionsForNormalizedPath(
+			const workspaceKey = resolveWorkspaceStoreKeyFromPath(
+				workspacePath,
+				state.workspaceRoots,
+			);
+			if (!workspaceKey) return state;
+			const current = mergeSessionsForWorkspaceKey(
 				state.sessionsByWorkspacePath,
-				normalizedPath,
+				workspaceKey,
 			);
 			const fromIndex = current.findIndex((s) => s.sessionId === fromSessionId);
 			const toIndex = current.findIndex((s) => s.sessionId === toSessionId);
@@ -529,15 +629,20 @@ export const useAppStore = create<AppState>((set) => ({
 			if (!moved) return state;
 			next.splice(toIndex, 0, moved);
 
+			// Once an explicit reorder happens, assign sortOrder to every session
+			// so ordering is fully deterministic and no session falls back to createdAt.
+			let sortIndex = 0;
+			for (let i = 0; i < next.length; i++) {
+				const s = next[i];
+				if (!s) continue;
+				next[i] = { ...s, sortOrder: sortIndex };
+				sortIndex++;
+			}
+
 			const nextSessionsByWorkspacePath = {
 				...state.sessionsByWorkspacePath,
 			};
-			for (const existingPath of Object.keys(nextSessionsByWorkspacePath)) {
-				if (normalizeWorkspacePath(existingPath) === normalizedPath) {
-					delete nextSessionsByWorkspacePath[existingPath];
-				}
-			}
-			nextSessionsByWorkspacePath[normalizedPath] = next;
+			nextSessionsByWorkspacePath[workspaceKey] = next;
 
 			return {
 				sessionsByWorkspacePath: nextSessionsByWorkspacePath,
@@ -574,54 +679,112 @@ export const useAppStore = create<AppState>((set) => ({
 				sessionsByWorkspacePath: nextSessionsByWorkspacePath,
 			};
 		}),
-	removeWorkspaceSession: (workspacePath, sessionId) =>
+	updateSessionSettings: (sessionId, settings) =>
 		set((state) => {
-			const normalizedPath = normalizeWorkspacePath(workspacePath);
-			const existing = mergeSessionsForNormalizedPath(
+			let changed = false;
+			const nextSessionsByWorkspacePath = Object.fromEntries(
+				Object.entries(state.sessionsByWorkspacePath).map(([path, sessions]) => {
+					let pathChanged = false;
+					const nextSessions = sessions.map((session) => {
+						if (session.sessionId !== sessionId) return session;
+						pathChanged = true;
+						changed = true;
+						return {
+							...session,
+							...("pinned" in settings ? { pinned: settings.pinned } : {}),
+							...("icon" in settings ? { icon: settings.icon } : {}),
+							...("sortOrder" in settings ? { sortOrder: settings.sortOrder } : {}),
+						};
+					});
+					return [path, pathChanged ? nextSessions : sessions];
+				}),
+			);
+			if (!changed) return state;
+
+			// Re-sort to maintain pinned-first order
+			const resorted = Object.fromEntries(
+				Object.entries(nextSessionsByWorkspacePath).map(([path, sessions]) => [
+					path,
+					normalizeWorkspaceSessions(sessions),
+				]),
+			);
+			return { sessionsByWorkspacePath: resorted };
+		}),
+	updateSessionActivity: (sessionId, activity) =>
+		set((state) => {
+			let changed = false;
+			const nextSessionsByWorkspacePath = Object.fromEntries(
+				Object.entries(state.sessionsByWorkspacePath).map(([path, sessions]) => {
+					let pathChanged = false;
+					const nextSessions = sessions.map((session) => {
+						if (session.sessionId !== sessionId) return session;
+						pathChanged = true;
+						changed = true;
+						return {
+							...session,
+							activity,
+						};
+					});
+					return [path, pathChanged ? nextSessions : sessions];
+				}),
+			);
+			if (!changed) return state;
+			return {
+				sessionsByWorkspacePath: nextSessionsByWorkspacePath,
+			};
+		}),
+	removeWorkspaceSession: (sessionId) =>
+		set((state) => {
+			const targetKey = Object.entries(state.sessionsByWorkspacePath).find(
+				([, sessions]) => sessions.some((session) => session.sessionId === sessionId),
+			)?.[0];
+			if (!targetKey) return state;
+			const existing = mergeSessionsForWorkspaceKey(
 				state.sessionsByWorkspacePath,
-				normalizedPath,
+				targetKey,
 			);
 			const filtered = existing.filter((s) => s.sessionId !== sessionId);
 			const nextSessionsByWorkspacePath = {
 				...state.sessionsByWorkspacePath,
 			};
-			for (const existingPath of Object.keys(nextSessionsByWorkspacePath)) {
-				if (normalizeWorkspacePath(existingPath) === normalizedPath) {
-					delete nextSessionsByWorkspacePath[existingPath];
-				}
-			}
 			if (filtered.length === 0) {
-				delete nextSessionsByWorkspacePath[normalizedPath];
+				delete nextSessionsByWorkspacePath[targetKey];
 			} else {
-				nextSessionsByWorkspacePath[normalizedPath] = filtered;
+				nextSessionsByWorkspacePath[targetKey] = filtered;
 			}
 
 			const activeId =
-				findActiveSessionIdForNormalizedPath(
+				findActiveSessionIdForWorkspaceKey(
 					state.activeSessionIdByWorkspacePath,
-					normalizedPath,
+					targetKey,
 				) ?? null;
 			const nextActive = {
 				...state.activeSessionIdByWorkspacePath,
 			};
-			for (const existingPath of Object.keys(nextActive)) {
-				if (normalizeWorkspacePath(existingPath) === normalizedPath) {
-					delete nextActive[existingPath];
-				}
+			if (targetKey in nextSessionsByWorkspacePath) {
+				nextActive[targetKey] = activeId === sessionId ? null : activeId;
+			} else {
+				delete nextActive[targetKey];
 			}
-			if (normalizedPath in nextSessionsByWorkspacePath) {
-				nextActive[normalizedPath] = activeId === sessionId ? null : activeId;
+
+			// Clear stale agent panel
+			const nextPanels = { ...state.activePanelByWorkspacePath };
+			const currentPanel = nextPanels[targetKey];
+			if (currentPanel?.kind === "agent" && currentPanel.sessionId === sessionId) {
+				nextPanels[targetKey] = { kind: "panel", panel: "files" };
 			}
 
 			return {
 				sessionsByWorkspacePath: nextSessionsByWorkspacePath,
 				activeSessionIdByWorkspacePath: nextActive,
+				activePanelByWorkspacePath: nextPanels,
 			};
 		}),
 	removeSessionById: (sessionId) =>
 		set((state) => {
 			let nextSessionsByWorkspacePath = { ...state.sessionsByWorkspacePath };
 			let nextActive = { ...state.activeSessionIdByWorkspacePath };
+			const nextPanels = { ...state.activePanelByWorkspacePath };
 			for (const [path, sessions] of Object.entries(nextSessionsByWorkspacePath)) {
 				if (!sessions.some((s) => s.sessionId === sessionId)) continue;
 				const filtered = sessions.filter((s) => s.sessionId !== sessionId);
@@ -634,31 +797,44 @@ export const useAppStore = create<AppState>((set) => ({
 						nextActive[path] = null;
 					}
 				}
+				// Clear stale agent panel
+				const currentPanel = nextPanels[path];
+				if (currentPanel?.kind === "agent" && currentPanel.sessionId === sessionId) {
+					nextPanels[path] = { kind: "panel", panel: "files" };
+				}
 			}
 			return {
 				sessionsByWorkspacePath: nextSessionsByWorkspacePath,
 				activeSessionIdByWorkspacePath: nextActive,
+				activePanelByWorkspacePath: nextPanels,
 			};
 		}),
-	attachWorkspaceSession: (workspacePath, sessionId) =>
-		set((state) => ({
-			activeSessionIdByWorkspacePath: {
-				...state.activeSessionIdByWorkspacePath,
-				[normalizeWorkspacePath(workspacePath)]: sessionId,
-			},
-		})),
+	attachWorkspaceSession: (workspacePath, sessionId, workspaceId) =>
+		set((state) => {
+			const workspaceKey =
+				workspaceStoreKey(workspaceId ?? null) ??
+				resolveWorkspaceStoreKeyFromPath(workspacePath, state.workspaceRoots);
+			if (!workspaceKey) return state;
+			return {
+				activeSessionIdByWorkspacePath: {
+					...state.activeSessionIdByWorkspacePath,
+					[workspaceKey]: sessionId,
+				},
+			};
+		}),
 	clearAllSessions: () =>
 		set({
 			sessionsByWorkspacePath: {},
 			activeSessionIdByWorkspacePath: {},
 		}),
 
+	availableAgents: [],
+	setAvailableAgents: (agents) => set({ availableAgents: agents }),
+
 	openFilePath: null,
 	openFileContent: null,
-	setOpenFile: (path, content) =>
-		set({ openFilePath: path, openFileContent: content }),
-	clearOpenFile: () => set({ openFilePath: null, openFileContent: null }),
-
-	quotaData: [],
-	setQuotaData: (data) => set({ quotaData: data }),
+	openFileImageSrc: null,
+	setOpenFile: (path, content, imageSrc = null) =>
+		set({ openFilePath: path, openFileContent: content, openFileImageSrc: imageSrc }),
+	clearOpenFile: () => set({ openFilePath: null, openFileContent: null, openFileImageSrc: null }),
 }));

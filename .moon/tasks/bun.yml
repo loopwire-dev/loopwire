@@ -4,8 +4,12 @@ tasks:
     inputs:
       - '@group(sources)'
       - '@group(configs)'
+    options:
+      envFile: '/.env'
 
   lint:
     command: 'biome check .'
     inputs:
       - '@group(sources)'
+    options:
+      envFile: '/.env'

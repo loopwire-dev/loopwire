@@ -1,4 +1,6 @@
-use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{
+    event::ModifyKind, Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
+};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::Path;
@@ -45,11 +47,11 @@ impl FsWatcher {
     ) -> anyhow::Result<broadcast::Receiver<FsEvent>> {
         let key = (workspace_id, relative_path.to_string());
 
-        let watches = self.watches.read().await;
+        // Take write lock upfront to avoid TOCTOU race between read-check and write-insert
+        let mut watches = self.watches.write().await;
         if let Some(entry) = watches.get(&key) {
             return Ok(entry.tx.subscribe());
         }
-        drop(watches);
 
         let full_path = workspace_root.join(relative_path);
         let (tx, rx) = broadcast::channel(256);
@@ -57,10 +59,11 @@ impl FsWatcher {
         let root = workspace_root.to_path_buf();
 
         let mut watcher = RecommendedWatcher::new(
-            move |result: Result<Event, notify::Error>| {
-                if let Ok(event) = result {
+            move |result: Result<Event, notify::Error>| match result {
+                Ok(event) => {
                     let kind = match event.kind {
                         EventKind::Create(_) => FsEventKind::Create,
+                        EventKind::Modify(ModifyKind::Name(_)) => FsEventKind::Rename,
                         EventKind::Modify(_) => FsEventKind::Modify,
                         EventKind::Remove(_) => FsEventKind::Delete,
                         _ => return,
@@ -77,13 +80,16 @@ impl FsWatcher {
                         });
                     }
                 }
+                Err(e) => {
+                    tracing::warn!("File watcher error: {e}");
+                }
             },
             Config::default(),
         )?;
 
         watcher.watch(&full_path, RecursiveMode::Recursive)?;
 
-        self.watches.write().await.insert(
+        watches.insert(
             key,
             WatchEntry {
                 _watcher: watcher,
@@ -103,5 +109,158 @@ impl FsWatcher {
 impl Default for FsWatcher {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+    use tokio::time::{sleep, Duration};
+
+    #[tokio::test]
+    async fn watch_create_event() {
+        let dir = TempDir::new().unwrap();
+        let watcher = FsWatcher::new();
+        let id = Uuid::new_v4();
+
+        let mut rx = watcher.watch(id, dir.path(), ".").await.unwrap();
+
+        // Give the watcher time to start
+        sleep(Duration::from_millis(100)).await;
+
+        fs::write(dir.path().join("new_file.txt"), "hello").unwrap();
+
+        // Wait for event with timeout
+        let event = tokio::time::timeout(Duration::from_secs(5), rx.recv())
+            .await
+            .expect("timed out waiting for event")
+            .expect("channel closed");
+
+        assert!(
+            matches!(event.kind, FsEventKind::Create | FsEventKind::Modify),
+            "expected Create or Modify, got {:?}",
+            event.kind
+        );
+    }
+
+    #[tokio::test]
+    async fn watch_delete_event() {
+        let dir = TempDir::new().unwrap();
+        let file_path = dir.path().join("to_delete.txt");
+        fs::write(&file_path, "bye").unwrap();
+
+        let watcher = FsWatcher::new();
+        let id = Uuid::new_v4();
+
+        let mut rx = watcher.watch(id, dir.path(), ".").await.unwrap();
+        sleep(Duration::from_millis(100)).await;
+
+        fs::remove_file(&file_path).unwrap();
+
+        // Collect events until we get a Delete
+        let mut got_delete = false;
+        for _ in 0..20 {
+            match tokio::time::timeout(Duration::from_secs(2), rx.recv()).await {
+                Ok(Ok(event)) if matches!(event.kind, FsEventKind::Delete) => {
+                    got_delete = true;
+                    break;
+                }
+                Ok(Ok(_)) => continue,
+                _ => break,
+            }
+        }
+        assert!(got_delete, "expected a Delete event");
+    }
+
+    #[tokio::test]
+    async fn multiple_subscribers_same_path() {
+        let dir = TempDir::new().unwrap();
+        let watcher = FsWatcher::new();
+        let id = Uuid::new_v4();
+
+        let mut rx1 = watcher.watch(id, dir.path(), ".").await.unwrap();
+        let mut rx2 = watcher.watch(id, dir.path(), ".").await.unwrap();
+
+        sleep(Duration::from_millis(100)).await;
+        fs::write(dir.path().join("shared.txt"), "data").unwrap();
+
+        let event1 = tokio::time::timeout(Duration::from_secs(5), rx1.recv())
+            .await
+            .expect("timed out")
+            .expect("channel closed");
+        let event2 = tokio::time::timeout(Duration::from_secs(5), rx2.recv())
+            .await
+            .expect("timed out")
+            .expect("channel closed");
+
+        // Both subscribers should receive the same event path
+        assert_eq!(event1.path, event2.path);
+    }
+
+    #[tokio::test]
+    async fn unwatch_removes_watcher() {
+        let dir = TempDir::new().unwrap();
+        let watcher = FsWatcher::new();
+        let id = Uuid::new_v4();
+
+        let _rx = watcher.watch(id, dir.path(), ".").await.unwrap();
+        assert_eq!(watcher.watches.read().await.len(), 1);
+
+        watcher.unwatch(id, ".").await;
+        assert_eq!(watcher.watches.read().await.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn unwatch_nonexistent_is_noop() {
+        let watcher = FsWatcher::new();
+        watcher.unwatch(Uuid::new_v4(), "nonexistent").await;
+        assert_eq!(watcher.watches.read().await.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn watch_nonexistent_path_fails() {
+        let watcher = FsWatcher::new();
+        let id = Uuid::new_v4();
+
+        let result = watcher.watch(id, Path::new("/nonexistent"), "path").await;
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn default_creates_new() {
+        let _watcher = FsWatcher::default();
+    }
+
+    #[test]
+    fn fs_event_kind_serialization() {
+        assert_eq!(
+            serde_json::to_string(&FsEventKind::Create).unwrap(),
+            "\"create\""
+        );
+        assert_eq!(
+            serde_json::to_string(&FsEventKind::Modify).unwrap(),
+            "\"modify\""
+        );
+        assert_eq!(
+            serde_json::to_string(&FsEventKind::Delete).unwrap(),
+            "\"delete\""
+        );
+        assert_eq!(
+            serde_json::to_string(&FsEventKind::Rename).unwrap(),
+            "\"rename\""
+        );
+    }
+
+    #[test]
+    fn fs_event_serialization() {
+        let event = FsEvent {
+            kind: FsEventKind::Create,
+            path: "test.txt".to_string(),
+        };
+        let json = serde_json::to_value(&event).unwrap();
+        assert_eq!(json["kind"], "create");
+        assert_eq!(json["path"], "test.txt");
     }
 }

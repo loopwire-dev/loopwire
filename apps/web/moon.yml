@@ -1,6 +1,6 @@
 language: typescript
 stack: frontend
-type: application
+layer: application
 
 fileGroups:
   sources:
@@ -15,7 +15,9 @@ dependsOn:
 tasks:
   dev:
     command: 'bunx --bun vite'
-    local: true
+    preset: server
+    options:
+      envFile: '/.env'
 
   build:
     command: 'bunx --bun vite build'
@@ -26,7 +28,45 @@ tasks:
       - 'vite.config.ts'
     outputs:
       - 'dist'
+    options:
+      envFile: '/.env'
 
   preview:
     command: 'bunx --bun vite preview'
-    local: true
+    preset: server
+    options:
+      envFile: '/.env'
+
+  format:
+    command: 'bun run format'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+
+  format-check:
+    command: 'bun run format:check'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+
+  test:
+    command: 'bun run test'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+
+  coverage:
+    command: 'bun run coverage'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+    outputs:
+      - 'coverage'
+
+  quality:
+    command: 'echo "web quality checks passed"'
+    deps:
+      - 'format-check'
+      - 'lint'
+      - 'typecheck'
+      - 'test'

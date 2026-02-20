@@ -1,9 +1,10 @@
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::Json;
+
 use serde::{Deserialize, Serialize};
 
-use crate::auth::TokenStore;
+use crate::auth::{extract_bearer_from_headers, generate_token, TokenStore};
 use crate::error::{ApiError, ApiErrorResponse};
 use crate::state::AppState;
 
@@ -107,19 +108,4 @@ pub async fn revoke(
 
     state.token_store.revoke_session(&token).await;
     Ok(StatusCode::NO_CONTENT)
-}
-
-fn extract_bearer_from_headers(headers: &HeaderMap) -> Option<String> {
-    headers
-        .get("authorization")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "))
-        .map(|s| s.to_string())
-}
-
-fn generate_token() -> String {
-    use rand::Rng;
-    let mut rng = rand::thread_rng();
-    let bytes: Vec<u8> = (0..32).map(|_| rng.gen()).collect();
-    hex::encode(bytes)
 }

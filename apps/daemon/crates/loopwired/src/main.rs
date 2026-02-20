@@ -1,9 +1,12 @@
 use clap::{Parser, Subcommand};
+use loopwired::{
+    is_process_alive, read_pid_file, register_mdns, remove_pid_file, write_pid_file,
+    ShareStartResponse, ShareStatusResponse,
+};
 use lw_api::auth::{load_or_create_bootstrap_token, regenerate_bootstrap_token};
 use lw_api::rest::health::init_start_time;
 use lw_api::{build_router, AppState};
-use lw_config::DaemonConfig;
-use std::fs;
+use lw_config::{ConfigPaths, DaemonConfig};
 use std::net::SocketAddr;
 
 #[derive(Parser)]
@@ -27,38 +30,42 @@ enum Commands {
     Stop,
     /// Generate a new bootstrap token
     Token,
+    /// Manage remote sharing links
+    Share {
+        #[command(subcommand)]
+        command: ShareCommands,
+    },
     /// Print version
     Version,
 }
 
-fn read_pid() -> Option<u32> {
-    let pid_path = DaemonConfig::pid_path();
-    fs::read_to_string(&pid_path)
-        .ok()
-        .and_then(|s| s.trim().parse().ok())
+#[derive(Subcommand)]
+enum ShareCommands {
+    /// Start remote sharing and print a connection link
+    Start {
+        /// Optional PIN required by new remote clients
+        #[arg(long)]
+        pin: Option<String>,
+        /// Optional invite token TTL in seconds
+        #[arg(long)]
+        ttl: Option<u64>,
+    },
+    /// Show remote sharing status
+    Status,
+    /// Stop remote sharing
+    Stop,
 }
 
-fn is_process_alive(pid: u32) -> bool {
-    #[cfg(unix)]
-    {
-        unsafe { libc::kill(pid as i32, 0) == 0 }
-    }
-    #[cfg(not(unix))]
-    {
-        // Fallback: assume alive if PID file exists
-        true
-    }
+fn read_pid(paths: &ConfigPaths) -> Option<u32> {
+    read_pid_file(&paths.pid_path())
 }
 
-fn write_pid() -> anyhow::Result<()> {
-    let pid_path = DaemonConfig::pid_path();
-    fs::write(&pid_path, std::process::id().to_string())?;
-    Ok(())
+fn write_pid(paths: &ConfigPaths) -> anyhow::Result<()> {
+    write_pid_file(&paths.pid_path())
 }
 
-fn remove_pid() {
-    let pid_path = DaemonConfig::pid_path();
-    let _ = fs::remove_file(&pid_path);
+fn remove_pid(paths: &ConfigPaths) {
+    remove_pid_file(&paths.pid_path());
 }
 
 #[tokio::main]
@@ -71,14 +78,14 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let cli = Cli::parse();
+    let paths = ConfigPaths::new()?;
 
     match cli.command {
         Commands::Start { port } => {
             let mut config = DaemonConfig::load()?;
             config.port = port;
 
-            // Check for stale PID
-            if let Some(pid) = read_pid() {
+            if let Some(pid) = read_pid(&paths) {
                 if is_process_alive(pid) {
                     anyhow::bail!(
                         "Daemon already running (PID {}). Use 'loopwired stop' first.",
@@ -86,15 +93,14 @@ async fn main() -> anyhow::Result<()> {
                     );
                 } else {
                     tracing::warn!("Removing stale PID file for dead process {}", pid);
-                    remove_pid();
+                    remove_pid(&paths);
                 }
             }
 
-            DaemonConfig::ensure_config_dir()?;
-            write_pid()?;
+            paths.ensure_config_dir()?;
+            write_pid(&paths)?;
 
-            // Load or generate bootstrap token
-            let (bootstrap_token, bootstrap_hash) = load_or_create_bootstrap_token();
+            let (bootstrap_token, bootstrap_hash) = load_or_create_bootstrap_token(&paths);
 
             let frontend_url = &config.frontend_url;
             println!("Loopwire daemon starting...");
@@ -106,7 +112,25 @@ async fn main() -> anyhow::Result<()> {
 
             init_start_time();
 
+            let mdns_daemon = if config.lan.enabled && !config.host.is_loopback() {
+                match register_mdns(config.port) {
+                    Ok(daemon) => Some(daemon),
+                    Err(e) => {
+                        tracing::warn!("Failed to register mDNS service: {}", e);
+                        None
+                    }
+                }
+            } else {
+                if !config.lan.enabled {
+                    tracing::info!("LAN discovery disabled in config");
+                } else {
+                    tracing::info!("Binding to loopback; skipping mDNS registration");
+                }
+                None
+            };
+
             let state = AppState::new(config.clone(), bootstrap_hash)?;
+            state.agent_manager.restore_persisted_agents().await;
             let shutdown_state = state.clone();
             let app = build_router(state);
 
@@ -115,7 +139,6 @@ async fn main() -> anyhow::Result<()> {
 
             let listener = tokio::net::TcpListener::bind(addr).await?;
 
-            // Graceful shutdown on ctrl+c and SIGTERM
             let shutdown = async move {
                 #[cfg(unix)]
                 {
@@ -134,26 +157,28 @@ async fn main() -> anyhow::Result<()> {
                         .expect("Failed to listen for ctrl+c");
                 }
                 tracing::info!("Shutting down...");
-                if shutdown_state.agent_manager.tmux_enabled() {
-                    tracing::info!("tmux detected; preserving agent sessions for recovery");
-                } else {
-                    shutdown_state.agent_manager.shutdown_all().await;
+                if let Some(daemon) = mdns_daemon {
+                    tracing::info!("Unregistering mDNS service...");
+                    let _ = daemon.shutdown();
                 }
-                remove_pid();
+                shutdown_state.agent_manager.shutdown_all().await;
+                remove_pid(&shutdown_state.paths);
             };
 
-            axum::serve(listener, app)
-                .with_graceful_shutdown(shutdown)
-                .await?;
+            axum::serve(
+                listener,
+                app.into_make_service_with_connect_info::<SocketAddr>(),
+            )
+            .with_graceful_shutdown(shutdown)
+            .await?;
 
             Ok(())
         }
 
         Commands::Status => {
-            match read_pid() {
+            match read_pid(&paths) {
                 Some(pid) if is_process_alive(pid) => {
                     println!("Daemon is running (PID {})", pid);
-                    // Try to hit health endpoint
                     let config = DaemonConfig::load()?;
                     match reqwest::get(format!("http://{}/api/v1/health", config.bind_addr())).await
                     {
@@ -169,7 +194,7 @@ async fn main() -> anyhow::Result<()> {
                 }
                 Some(pid) => {
                     println!("Daemon is not running (stale PID {})", pid);
-                    remove_pid();
+                    remove_pid(&paths);
                 }
                 None => {
                     println!("Daemon is not running");
@@ -179,14 +204,13 @@ async fn main() -> anyhow::Result<()> {
         }
 
         Commands::Stop => {
-            match read_pid() {
+            match read_pid(&paths) {
                 Some(pid) if is_process_alive(pid) => {
                     println!("Stopping daemon (PID {})...", pid);
                     #[cfg(unix)]
                     unsafe {
                         libc::kill(pid as i32, libc::SIGTERM);
                     }
-                    // Wait for process to exit
                     for _ in 0..50 {
                         if !is_process_alive(pid) {
                             break;
@@ -200,12 +224,12 @@ async fn main() -> anyhow::Result<()> {
                             libc::kill(pid as i32, libc::SIGKILL);
                         }
                     }
-                    remove_pid();
+                    remove_pid(&paths);
                     println!("Daemon stopped.");
                 }
                 Some(pid) => {
                     println!("Daemon not running (stale PID {}), cleaning up.", pid);
-                    remove_pid();
+                    remove_pid(&paths);
                 }
                 None => {
                     println!("Daemon is not running.");
@@ -215,16 +239,108 @@ async fn main() -> anyhow::Result<()> {
         }
 
         Commands::Token => {
-            DaemonConfig::ensure_config_dir()?;
-            let token = regenerate_bootstrap_token();
+            paths.ensure_config_dir()?;
+            let token = regenerate_bootstrap_token(&paths);
             println!("{}", token);
             let config = DaemonConfig::load()?;
-            if let Some(pid) = read_pid() {
+            if let Some(pid) = read_pid(&paths) {
                 if is_process_alive(pid) {
                     println!("\nOpen: {}/?token={}", config.frontend_url, token);
                     println!("\nNote: restart the daemon for the new token to take effect.");
                 }
             }
+            Ok(())
+        }
+
+        Commands::Share { command } => {
+            let config = DaemonConfig::load()?;
+            let base = format!("http://127.0.0.1:{}", config.port);
+            let client = reqwest::Client::new();
+
+            match command {
+                ShareCommands::Start { pin, ttl } => {
+                    let resp = client
+                        .post(format!("{}/api/v1/remote/share/local/start", base))
+                        .json(&serde_json::json!({
+                            "pin": pin,
+                            "ttl_seconds": ttl,
+                        }))
+                        .send()
+                        .await?;
+
+                    if !resp.status().is_success() {
+                        let text = resp.text().await.unwrap_or_default();
+                        anyhow::bail!("Failed to start remote share: {}", text);
+                    }
+
+                    let body: ShareStartResponse = resp.json().await?;
+                    println!("Remote sharing started");
+                    println!("  Provider: {}", body.provider);
+                    println!("  Backend:  {}", body.public_backend_url);
+                    println!("  Expires:  {}", body.expires_at);
+                    println!(
+                        "  PIN:      {}",
+                        if body.pin_required { "required" } else { "off" }
+                    );
+                    println!();
+                    println!("Connect link:");
+                    println!("{}", body.connect_url);
+                }
+                ShareCommands::Status => {
+                    let resp = client
+                        .get(format!("{}/api/v1/remote/share/local/status", base))
+                        .send()
+                        .await?;
+
+                    if !resp.status().is_success() {
+                        let text = resp.text().await.unwrap_or_default();
+                        anyhow::bail!("Failed to get remote share status: {}", text);
+                    }
+
+                    let body: ShareStatusResponse = resp.json().await?;
+                    if !body.active {
+                        println!("Remote sharing is inactive");
+                    } else {
+                        println!("Remote sharing is active");
+                        println!(
+                            "  Provider: {}",
+                            body.provider.unwrap_or_else(|| "unknown".to_string())
+                        );
+                        println!(
+                            "  Backend:  {}",
+                            body.public_backend_url
+                                .unwrap_or_else(|| "<none>".to_string())
+                        );
+                        println!(
+                            "  Expires:  {}",
+                            body.expires_at.unwrap_or_else(|| "<none>".to_string())
+                        );
+                        println!(
+                            "  PIN:      {}",
+                            if body.pin_required { "required" } else { "off" }
+                        );
+                        if let Some(link) = body.connect_url {
+                            println!();
+                            println!("Connect link:");
+                            println!("{}", link);
+                        }
+                    }
+                }
+                ShareCommands::Stop => {
+                    let resp = client
+                        .post(format!("{}/api/v1/remote/share/local/stop", base))
+                        .send()
+                        .await?;
+
+                    if !resp.status().is_success() {
+                        let text = resp.text().await.unwrap_or_default();
+                        anyhow::bail!("Failed to stop remote share: {}", text);
+                    }
+
+                    println!("Remote sharing stopped");
+                }
+            }
+
             Ok(())
         }
 

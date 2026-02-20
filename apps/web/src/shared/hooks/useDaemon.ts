@@ -1,101 +1,80 @@
 import { useEffect, useRef } from "react";
-import { useAppStore } from "../stores/app-store";
 import { wsClient } from "../lib/ws";
-import { ApiError, api } from "../lib/api";
+import { api } from "../lib/api";
+import {
+	defaultAgentActivity,
+	useAppStore,
+	type AgentActivity,
+	type AvailableAgent,
+} from "../stores/app-store";
 
 interface AgentSessionResponse {
   session_id: string;
   agent_type: string;
   custom_name?: string | null;
-  workspace_path: string;
+  pinned?: boolean;
+  icon?: string | null;
+  sort_order?: number | null;
   status: string;
+  resume_failure_reason?: string | null;
   created_at: string;
+  activity?: AgentActivity;
 }
 
-interface AgentSessionStatusResponse {
-  status: string;
+interface BootstrapWorkspaceEntry {
+  id: string;
+  path: string;
+  name: string;
+  pinned: boolean;
+  icon: string | null;
+  sessions: AgentSessionResponse[];
 }
 
-const sessionStatusInFlight = new Map<string, Promise<boolean>>();
-const sessionStatusCache = new Map<string, { value: boolean; ts: number }>();
-const SESSION_STATUS_CACHE_MS = 1000;
-const pendingExitChecks = new Set<string>();
-
-async function isSessionStillRunning(sessionId: string): Promise<boolean> {
-  const now = Date.now();
-  const cached = sessionStatusCache.get(sessionId);
-  if (cached && now - cached.ts < SESSION_STATUS_CACHE_MS) {
-    return cached.value;
-  }
-
-  const existing = sessionStatusInFlight.get(sessionId);
-  if (existing) {
-    return existing;
-  }
-
-  const request = (async () => {
-    let value = true;
-    try {
-      const session = await api.get<AgentSessionStatusResponse>(`/agents/sessions/${sessionId}`);
-      value = session.status === "running";
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 404) {
-        value = false;
-      } else {
-        value = true;
-      }
-    }
-    sessionStatusCache.set(sessionId, { value, ts: Date.now() });
-    return value;
-  })();
-
-  sessionStatusInFlight.set(sessionId, request);
-  try {
-    return await request;
-  } finally {
-    sessionStatusInFlight.delete(sessionId);
-  }
+interface BootstrapResponse {
+  workspaces: BootstrapWorkspaceEntry[];
+  available_agents: AvailableAgent[];
 }
 
 export function useDaemon() {
   const token = useAppStore((s) => s.token);
   const connected = useAppStore((s) => s.daemonConnected);
   const hydrateWorkspaceSessions = useAppStore((s) => s.hydrateWorkspaceSessions);
-  const addWorkspaceRoot = useAppStore((s) => s.addWorkspaceRoot);
-  const removeSessionById = useAppStore((s) => s.removeSessionById);
+  const mergeBackendWorkspaces = useAppStore((s) => s.mergeBackendWorkspaces);
+  const setAvailableAgents = useAppStore((s) => s.setAvailableAgents);
+  const updateSessionActivity = useAppStore((s) => s.updateSessionActivity);
   const connectedTokenRef = useRef<string | null>(null);
   const hydrateFromDaemon = useRef<(() => Promise<void>) | null>(null);
 
   hydrateFromDaemon.current = async () => {
-    const sessions = await api.get<AgentSessionResponse[]>("/agents/sessions");
-    const running = sessions.filter((session) => session.status === "running");
+    const data = await api.get<BootstrapResponse>("/bootstrap");
+
+    mergeBackendWorkspaces(data.workspaces);
+    setAvailableAgents(data.available_agents);
+
+    const running = data.workspaces.flatMap((workspace) =>
+      workspace.sessions
+        .filter((session) => session.status === "running" || session.status === "restored")
+        .map((session) => ({
+          ...session,
+          workspace_id: workspace.id,
+        })),
+    );
     hydrateWorkspaceSessions(
       running.map((session) => ({
         sessionId: session.session_id,
         agentType: session.agent_type,
         customName: session.custom_name ?? null,
+        workspaceId: session.workspace_id,
+        pinned: session.pinned ?? false,
+        icon: session.icon ?? null,
+        sortOrder: session.sort_order ?? null,
         status: session.status,
-        workspacePath: session.workspace_path,
+        resumeFailureReason: session.resume_failure_reason ?? null,
         createdAt: session.created_at,
+        activity: session.activity ?? defaultAgentActivity(),
       })),
     );
-    for (const session of running) {
-      addWorkspaceRoot(session.workspace_path);
-    }
   };
-
-  useEffect(() => {
-    if (token && token !== connectedTokenRef.current) {
-      connectedTokenRef.current = token;
-      // hydrateFromDaemon is called via the onReconnect callback (which
-      // also fires on the initial connection), so no need to call it here.
-      wsClient.connect();
-    } else if (!token && connectedTokenRef.current) {
-      connectedTokenRef.current = null;
-      wsClient.disconnect();
-    }
-    // No cleanup — we manage the lifecycle via the ref
-  }, [addWorkspaceRoot, hydrateWorkspaceSessions, token]);
 
   useEffect(() => {
     const unsubReconnect = wsClient.onReconnect(() => {
@@ -110,37 +89,53 @@ export function useDaemon() {
   }, []);
 
   useEffect(() => {
-    const unsubExit = wsClient.on("pty:exit", (env) => {
-      const rawSessionId = env.payload.session_id;
-      if (typeof rawSessionId !== "string") return;
-      if (pendingExitChecks.has(rawSessionId)) return;
-      pendingExitChecks.add(rawSessionId);
-      void (async () => {
-        try {
-          await new Promise((resolve) => setTimeout(resolve, 200));
-          const firstCheck = await isSessionStillRunning(rawSessionId);
-          if (firstCheck) return;
-
-          await new Promise((resolve) => setTimeout(resolve, 400));
-          const secondCheck = await isSessionStillRunning(rawSessionId);
-          if (!secondCheck) {
-            removeSessionById(rawSessionId);
-          }
-        } finally {
-          pendingExitChecks.delete(rawSessionId);
-        }
-      })();
-    });
-    return () => {
-      unsubExit();
-    };
-  }, [removeSessionById]);
+    if (token && token !== connectedTokenRef.current) {
+      connectedTokenRef.current = token;
+      // hydrateFromDaemon is called via the onReconnect callback (which
+      // also fires on the initial connection), so no need to call it here.
+      wsClient.connect();
+    } else if (!token && connectedTokenRef.current) {
+      connectedTokenRef.current = null;
+      wsClient.disconnect();
+    }
+    // No cleanup — we manage the lifecycle via the ref
+  }, [hydrateWorkspaceSessions, mergeBackendWorkspaces, setAvailableAgents, token]);
 
   useEffect(() => {
+    const unsubActivity = wsClient.on("agent:activity", (env) => {
+      const rawSessionId = env.payload.session_id;
+      if (typeof rawSessionId !== "string") return;
+      const rawActivity = env.payload.activity;
+      if (!rawActivity || typeof rawActivity !== "object") return;
+      const record = rawActivity as Record<string, unknown>;
+      const phase = record.phase;
+      const updatedAt = record.updated_at;
+      if (
+        phase !== "unknown" &&
+        phase !== "awaiting_user" &&
+        phase !== "user_input" &&
+        phase !== "processing" &&
+        phase !== "streaming_output"
+      ) {
+        return;
+      }
+      if (typeof updatedAt !== "string") return;
+
+      updateSessionActivity(rawSessionId, {
+        phase,
+        is_idle: record.is_idle === true,
+        updated_at: updatedAt,
+        last_input_at: typeof record.last_input_at === "string" ? record.last_input_at : null,
+        last_output_at:
+          typeof record.last_output_at === "string" ? record.last_output_at : null,
+        reason: typeof record.reason === "string" ? record.reason : "unknown",
+      });
+    });
+
     return () => {
-      pendingExitChecks.clear();
+      unsubActivity();
     };
-  }, []);
+  }, [updateSessionActivity]);
 
   return { connected };
 }

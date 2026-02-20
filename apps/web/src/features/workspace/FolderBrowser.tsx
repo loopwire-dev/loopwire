@@ -1,8 +1,39 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Folder } from "lucide-react";
 import { Button } from "../../shared/ui/Button";
 import { api } from "../../shared/lib/api";
 import type { DirEntry } from "./useFileSystem";
+
+const fsBrowseInFlight = new Map<string, Promise<DirEntry[]>>();
+
+function fetchFsBrowse(path: string): Promise<DirEntry[]> {
+  const existing = fsBrowseInFlight.get(path);
+  if (existing) return existing;
+
+  const request = api
+    .get<DirEntry[]>("/fs/browse", { path })
+    .finally(() => {
+      fsBrowseInFlight.delete(path);
+    });
+
+  fsBrowseInFlight.set(path, request);
+  return request;
+}
+
+const fsRootsInFlight: { promise: Promise<{ roots: string[] }> | null } = { promise: null };
+
+function fetchFsRoots(): Promise<{ roots: string[] }> {
+  if (fsRootsInFlight.promise) return fsRootsInFlight.promise;
+
+  const request = api
+    .get<{ roots: string[] }>("/fs/roots")
+    .finally(() => {
+      fsRootsInFlight.promise = null;
+    });
+
+  fsRootsInFlight.promise = request;
+  return request;
+}
 
 interface FolderBrowserProps {
   initialPath?: string;
@@ -20,14 +51,13 @@ export function FolderBrowser({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showHidden, setShowHidden] = useState(false);
+  const fetchIdRef = useRef(0);
 
   const loadDirectory = useCallback(async (path: string) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get<DirEntry[]>("/fs/browse", {
-        path,
-      });
+      const res = await fetchFsBrowse(path);
       setEntries(res.filter((e) => e.kind === "directory"));
       setCurrentPath(path);
     } catch (err) {
@@ -38,18 +68,44 @@ export function FolderBrowser({
   }, []);
 
   useEffect(() => {
-    if (initialPath && initialPath !== "~") {
-      loadDirectory(initialPath);
-    } else {
-      // Resolve home directory from the daemon
-      api
-        .get<{ roots: string[] }>("/fs/roots")
-        .then((res) => {
-          const home = res.roots[res.roots.length - 1] ?? "/";
-          loadDirectory(home);
-        })
-        .catch(() => loadDirectory("/"));
-    }
+    const id = ++fetchIdRef.current;
+
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        let targetPath: string;
+        if (initialPath && initialPath !== "~") {
+          targetPath = initialPath;
+        } else {
+          const res = await fetchFsRoots();
+          if (id !== fetchIdRef.current) return;
+          targetPath = res.roots[res.roots.length - 1] ?? "/";
+        }
+        const entries = await fetchFsBrowse(targetPath);
+        if (id !== fetchIdRef.current) return;
+        setEntries(entries.filter((e) => e.kind === "directory"));
+        setCurrentPath(targetPath);
+      } catch (err) {
+        if (id !== fetchIdRef.current) return;
+        // Fallback to root
+        try {
+          const entries = await fetchFsBrowse("/");
+          if (id !== fetchIdRef.current) return;
+          setEntries(entries.filter((e) => e.kind === "directory"));
+          setCurrentPath("/");
+        } catch (fallbackErr) {
+          if (id !== fetchIdRef.current) return;
+          setError(fallbackErr instanceof Error ? fallbackErr.message : "Failed to list directory");
+        }
+      } finally {
+        if (id === fetchIdRef.current) setLoading(false);
+      }
+    })();
+
+    return () => {
+      ++fetchIdRef.current;
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const navigateUp = () => {

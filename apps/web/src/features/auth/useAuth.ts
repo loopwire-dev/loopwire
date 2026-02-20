@@ -12,6 +12,9 @@ export function useAuth() {
   const exchangeStarted = useRef(false);
 
   useEffect(() => {
+    const pathname = window.location.pathname;
+    const inConnectFlow = pathname === "/connect";
+
     // Guard against StrictMode double-firing
     if (exchangeStarted.current) return;
 
@@ -38,9 +41,11 @@ export function useAuth() {
           console.error("Token exchange failed:", err);
           exchangeStarted.current = false;
           setExchangingToken(false);
-          navigate("/auth");
+          if (!inConnectFlow) {
+            navigate("/auth");
+          }
         });
-    } else if (!token && !exchangingToken) {
+    } else if (!token && !exchangingToken && !inConnectFlow) {
       navigate("/auth");
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

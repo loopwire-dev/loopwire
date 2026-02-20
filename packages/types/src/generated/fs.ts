@@ -13,6 +13,7 @@ export interface FileContent {
   content: string;
   size: number;
   is_binary: boolean;
+  binary_content_base64: string | null;
 }
 
 export interface RootsResponse {

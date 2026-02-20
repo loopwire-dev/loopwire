@@ -7,6 +7,10 @@ interface TooltipProps {
 }
 
 export function Tooltip({ content, children }: TooltipProps) {
+  if (!content.trim()) {
+    return children;
+  }
+
   return (
     <TooltipPrimitive.Provider>
       <TooltipPrimitive.Root>

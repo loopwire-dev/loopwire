@@ -16,6 +16,8 @@ export function AgentStatus({ status, agentType }: AgentStatusProps) {
   const statusColors: Record<string, string> = {
     running:
       "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+    restored:
+      "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
     starting:
       "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
     stopped:

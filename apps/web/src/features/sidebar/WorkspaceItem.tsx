@@ -1,10 +1,13 @@
-import { useRef, type ReactNode } from "react";
 import { Ellipsis } from "lucide-react";
+import { type ReactNode, useRef } from "react";
 import type { WorkspaceRoot } from "../../shared/stores/app-store";
 import { Tooltip } from "../../shared/ui/Tooltip";
-import { WorkspaceIcon } from "./WorkspaceIcon";
-import { AgentRunningBadge } from "./AgentRunningBadge";
+import {
+	SIDEBAR_TAB_HOVER_CLASS,
+	SIDEBAR_TAB_SELECTED_OVERLAY_CLASS,
+} from "./sidebar-tab-styles";
 import { WorkspaceContextMenu } from "./WorkspaceContextMenu";
+import { WorkspaceIcon } from "./WorkspaceIcon";
 
 function MaybeTooltip({
 	active,
@@ -25,7 +28,6 @@ interface WorkspaceItemProps {
 	compact: boolean;
 	isDragging: boolean;
 	isDragOver: boolean;
-	runningCount: number;
 	isEditing: boolean;
 	editingName: string;
 	onEditingNameChange: (name: string) => void;
@@ -51,7 +53,6 @@ export function WorkspaceItem({
 	compact,
 	isDragging,
 	isDragOver,
-	runningCount,
 	isEditing,
 	editingName,
 	onEditingNameChange,
@@ -88,14 +89,14 @@ export function WorkspaceItem({
 				active={compact || !isDragging}
 				content={compact ? root.name : root.path}
 			>
-				<div
-					role="button"
-					tabIndex={0}
-					className={`group relative w-full rounded-lg px-3 py-2 text-sm cursor-pointer transition-colors text-left ${
-						isActive
-							? "font-medium"
-							: "hover:bg-surface-raised"
-					}`}
+					<div
+						role="button"
+						tabIndex={0}
+						className={`group relative h-9 w-full rounded-lg px-3 text-sm cursor-pointer overflow-hidden transition-colors text-left ${
+							isActive
+								? "font-medium"
+								: SIDEBAR_TAB_HOVER_CLASS
+						}`}
 					onClick={() => {
 						if (isEditing) return;
 						onActivate();
@@ -108,15 +109,20 @@ export function WorkspaceItem({
 						}
 					}}
 				>
-					{isActive && (
 						<span
 							aria-hidden="true"
-							className="pointer-events-none absolute inset-0 rounded-lg ring-1 ring-black/[0.04] bg-white/55 shadow-sm backdrop-blur-2xl backdrop-saturate-200 dark:ring-white/[0.08] dark:bg-surface-raised dark:shadow-[0_1px_3px_rgba(0,0,0,0.4)]"
+							className={`${SIDEBAR_TAB_SELECTED_OVERLAY_CLASS} ${
+								isActive ? "opacity-100" : "opacity-0"
+							}`}
 						/>
-					)}
-					<div className="relative flex w-full items-center gap-2">
-						<WorkspaceIcon icon={root.icon} />
-						{isEditing && !compact ? (
+					<div className="relative flex h-full w-full items-center gap-2">
+						<span className="inline-flex h-4 w-4 shrink-0 items-center justify-center leading-none">
+							<WorkspaceIcon
+								icon={root.icon}
+								emojiClassName="inline-flex h-4 w-4 items-center justify-center text-[15px] leading-none align-middle"
+							/>
+						</span>
+						{compact ? null : isEditing ? (
 							<input
 								autoFocus
 								value={editingName}
@@ -133,55 +139,43 @@ export function WorkspaceItem({
 								className="flex-1 min-w-0 rounded border border-border bg-surface px-1.5 py-0.5 text-sm"
 							/>
 						) : (
-							<span
-								className={`truncate flex-1 min-w-0 whitespace-nowrap transition-opacity duration-200 ${
-									compact ? "opacity-0" : "opacity-100"
-								}`}
-							>
+							<span className="truncate flex-1 min-w-0 whitespace-nowrap">
 								{root.name}
 							</span>
 						)}
-						{runningCount > 0 && (
-							compact ? (
-								<span className="absolute -top-1 -right-1">
-									<AgentRunningBadge count={runningCount} />
-								</span>
-							) : (
-								<AgentRunningBadge count={runningCount} />
-							)
-						)}
-						<div
-							className={`relative shrink-0 self-center transition-opacity duration-200 ${
-								compact
-									? "opacity-0 pointer-events-none"
-									: "opacity-100"
-							}`}
-							data-workspace-menu-container="true"
-						>
-							<button
-								ref={menuButtonRef}
-								type="button"
-								onClick={(event) => {
-									event.stopPropagation();
-									onToggleMenu();
-								}}
-								className="inline-flex h-6 w-6 translate-y-px items-center justify-center text-muted hover:text-foreground transition-colors rounded-md hover:bg-surface hover:shadow-sm"
-								title="Workspace actions"
-								tabIndex={compact ? -1 : 0}
+						{compact ? null : (
+							<div
+								className="relative shrink-0 self-center"
+								data-workspace-menu-container="true"
 							>
-								<Ellipsis aria-hidden="true" size={14} />
-							</button>
-							{isMenuOpen && !compact && (
-								<WorkspaceContextMenu
-									root={root}
-									anchorRef={menuButtonRef}
-									onTogglePin={onTogglePin}
-									onRename={onRename}
-									onSetIcon={onSetIcon}
-									onDelete={onDelete}
-								/>
-							)}
-						</div>
+								<button
+									ref={menuButtonRef}
+									type="button"
+									onClick={(event) => {
+										event.stopPropagation();
+										onToggleMenu();
+									}}
+									className={`inline-flex h-6 w-6 translate-y-px items-center justify-center rounded-md transition-all ${
+										isMenuOpen
+											? "!opacity-100 text-foreground"
+											: "opacity-0 group-hover:opacity-100 text-muted hover:text-foreground"
+									}`}
+									title="Workspace actions"
+								>
+									<Ellipsis aria-hidden="true" size={14} />
+								</button>
+								{isMenuOpen && (
+									<WorkspaceContextMenu
+										root={root}
+										anchorRef={menuButtonRef}
+										onTogglePin={onTogglePin}
+										onRename={onRename}
+										onSetIcon={onSetIcon}
+										onDelete={onDelete}
+									/>
+								)}
+							</div>
+						)}
 					</div>
 				</div>
 			</MaybeTooltip>
