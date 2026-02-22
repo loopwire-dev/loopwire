@@ -59,8 +59,7 @@ export function InlineAgentPicker() {
 										key={`${a.agent_type}:${a.name}:${a.version ?? "unknown"}:${index}`}
 										type="button"
 										disabled={
-											starting ||
-											(!a.installed && a.agent_type !== "gemini")
+											starting || (!a.installed && a.agent_type !== "gemini")
 										}
 										onClick={() => {
 											if (a.installed) {

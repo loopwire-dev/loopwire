@@ -1,11 +1,11 @@
 import { useEffect } from "react";
-import { wsClient, type WsEnvelope } from "../lib/ws";
+import { type WsEnvelope, wsClient } from "../lib/ws";
 
 export function useWebSocket(
-  type: string,
-  handler: (envelope: WsEnvelope) => void,
+	type: string,
+	handler: (envelope: WsEnvelope) => void,
 ) {
-  useEffect(() => {
-    return wsClient.on(type, handler);
-  }, [type, handler]);
+	useEffect(() => {
+		return wsClient.on(type, handler);
+	}, [type, handler]);
 }

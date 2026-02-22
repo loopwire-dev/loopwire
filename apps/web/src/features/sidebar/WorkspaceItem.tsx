@@ -2,12 +2,12 @@ import { Ellipsis } from "lucide-react";
 import { type ReactNode, useRef } from "react";
 import type { WorkspaceRoot } from "../../shared/stores/app-store";
 import { Tooltip } from "../../shared/ui/Tooltip";
+import { WorkspaceContextMenu } from "./WorkspaceContextMenu";
+import { WorkspaceIcon } from "./WorkspaceIcon";
 import {
 	SIDEBAR_TAB_HOVER_CLASS,
 	SIDEBAR_TAB_SELECTED_OVERLAY_CLASS,
 } from "./sidebar-tab-styles";
-import { WorkspaceContextMenu } from "./WorkspaceContextMenu";
-import { WorkspaceIcon } from "./WorkspaceIcon";
 
 function MaybeTooltip({
 	active,
@@ -89,14 +89,10 @@ export function WorkspaceItem({
 				active={compact || !isDragging}
 				content={compact ? root.name : root.path}
 			>
-					<div
-						role="button"
-						tabIndex={0}
-						className={`group relative h-9 w-full rounded-lg px-3 text-sm cursor-pointer overflow-hidden transition-colors text-left ${
-							isActive
-								? "font-medium"
-								: SIDEBAR_TAB_HOVER_CLASS
-						}`}
+				<div
+					className={`group relative h-9 w-full rounded-lg px-3 text-sm cursor-pointer overflow-hidden transition-colors text-left ${
+						isActive ? "font-medium" : SIDEBAR_TAB_HOVER_CLASS
+					}`}
 					onClick={() => {
 						if (isEditing) return;
 						onActivate();
@@ -109,12 +105,12 @@ export function WorkspaceItem({
 						}
 					}}
 				>
-						<span
-							aria-hidden="true"
-							className={`${SIDEBAR_TAB_SELECTED_OVERLAY_CLASS} ${
-								isActive ? "opacity-100" : "opacity-0"
-							}`}
-						/>
+					<span
+						aria-hidden="true"
+						className={`${SIDEBAR_TAB_SELECTED_OVERLAY_CLASS} ${
+							isActive ? "opacity-100" : "opacity-0"
+						}`}
+					/>
 					<div className="relative flex h-full w-full items-center gap-2">
 						<span className="inline-flex h-4 w-4 shrink-0 items-center justify-center leading-none">
 							<WorkspaceIcon
@@ -124,7 +120,6 @@ export function WorkspaceItem({
 						</span>
 						{compact ? null : isEditing ? (
 							<input
-								autoFocus
 								value={editingName}
 								onChange={(event) => onEditingNameChange(event.target.value)}
 								onBlur={onSubmitRename}

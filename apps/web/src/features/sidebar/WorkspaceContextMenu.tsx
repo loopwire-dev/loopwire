@@ -1,6 +1,6 @@
+import { Pencil, Pin, PinOff, Smile } from "lucide-react";
 import { useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Pencil, Pin, PinOff, Smile } from "lucide-react";
 import type { WorkspaceRoot } from "../../shared/stores/app-store";
 import { SlideDeleteButton } from "../../shared/ui/SlideDeleteButton";
 

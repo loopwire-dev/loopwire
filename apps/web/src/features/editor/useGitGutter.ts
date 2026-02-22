@@ -1,7 +1,11 @@
 import type * as Monaco from "monaco-editor";
 import { useEffect, useRef } from "react";
-import { type DiffFile, fetchGitDiffFiles, getCachedDiffFiles } from "./diffUtils";
 import { DiffPeekWidget } from "./DiffPeekWidget";
+import {
+	type DiffFile,
+	fetchGitDiffFiles,
+	getCachedDiffFiles,
+} from "./diffUtils";
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -26,12 +30,16 @@ function computeGutterRanges(file: DiffFile): GutterRange[] {
 		const { lines } = hunk;
 		let i = 0;
 		while (i < lines.length) {
-			const line = lines[i]!;
+			const line = lines[i];
+			if (!line) {
+				i++;
+				continue;
+			}
 
 			// Collect consecutive deletions
 			if (line.type === "deletion") {
 				const deletionStart = i;
-				while (i < lines.length && lines[i]!.type === "deletion") {
+				while (i < lines.length && lines[i]?.type === "deletion") {
 					i++;
 				}
 				const deletionCount = i - deletionStart;
@@ -40,18 +48,21 @@ function computeGutterRanges(file: DiffFile): GutterRange[] {
 					.map((l) => l.content.slice(1));
 
 				// Check if additions follow (modified lines)
-				if (i < lines.length && lines[i]!.type === "addition") {
+				if (i < lines.length && lines[i]?.type === "addition") {
 					const addStart = i;
-					while (i < lines.length && lines[i]!.type === "addition") {
+					while (i < lines.length && lines[i]?.type === "addition") {
 						i++;
 					}
 					const addCount = i - addStart;
 					const addedContents = lines
 						.slice(addStart, addStart + addCount)
 						.map((l) => l.content.slice(1));
-					const firstAddLine = lines[addStart]!.newLine;
-					const lastAddLine = lines[i - 1]!.newLine;
-					if (firstAddLine !== null && lastAddLine !== null) {
+					const firstAddLine = lines[addStart]?.newLine;
+					const lastAddLine = lines[i - 1]?.newLine;
+					if (
+						typeof firstAddLine === "number" &&
+						typeof lastAddLine === "number"
+					) {
 						const modifiedEnd = Math.min(deletionCount, addCount);
 						if (modifiedEnd > 0) {
 							ranges.push({
@@ -91,7 +102,7 @@ function computeGutterRanges(file: DiffFile): GutterRange[] {
 					}
 				} else {
 					// Pure deletions with no following additions
-					const anchorLine = lines[deletionStart]!.anchorNewLine;
+					const anchorLine = lines[deletionStart]?.anchorNewLine;
 					if (anchorLine !== null && anchorLine !== undefined) {
 						const markerLine = Math.max(1, anchorLine);
 						ranges.push({
@@ -112,20 +123,18 @@ function computeGutterRanges(file: DiffFile): GutterRange[] {
 			if (line.type === "addition") {
 				const addStart = i;
 				const firstLine = line.newLine;
-				while (i < lines.length && lines[i]!.type === "addition") {
+				while (i < lines.length && lines[i]?.type === "addition") {
 					i++;
 				}
-				const lastLine = lines[i - 1]!.newLine;
-				if (firstLine !== null && lastLine !== null) {
+				const lastLine = lines[i - 1]?.newLine;
+				if (typeof firstLine === "number" && typeof lastLine === "number") {
 					ranges.push({
 						kind: "added",
 						startLine: firstLine,
 						endLine: lastLine,
 						content: {
 							oldLines: [],
-							newLines: lines
-								.slice(addStart, i)
-								.map((l) => l.content.slice(1)),
+							newLines: lines.slice(addStart, i).map((l) => l.content.slice(1)),
 						},
 					});
 				}
@@ -159,9 +168,7 @@ const HOVER_MESSAGES: Record<GutterKind, string> = {
 };
 
 function serializeRanges(ranges: GutterRange[]): string {
-	return ranges
-		.map((r) => `${r.kind}:${r.startLine}-${r.endLine}`)
-		.join("|");
+	return ranges.map((r) => `${r.kind}:${r.startLine}-${r.endLine}`).join("|");
 }
 
 export function useGitGutter(
@@ -170,9 +177,9 @@ export function useGitGutter(
 	editorRef: React.RefObject<Monaco.editor.IStandaloneCodeEditor | null>,
 	monacoRef: React.RefObject<typeof Monaco | null>,
 	isDark: boolean,
-	editorReady = false,
 ) {
-	const collectionRef = useRef<Monaco.editor.IEditorDecorationsCollection | null>(null);
+	const collectionRef =
+		useRef<Monaco.editor.IEditorDecorationsCollection | null>(null);
 
 	useEffect(() => {
 		if (!workspaceId || !filePath) return;
@@ -228,7 +235,8 @@ export function useGitGutter(
 			);
 
 			if (!collectionRef.current) {
-				collectionRef.current = editor.createDecorationsCollection(newDecorations);
+				collectionRef.current =
+					editor.createDecorationsCollection(newDecorations);
 			} else {
 				collectionRef.current.set(newDecorations);
 			}
@@ -255,10 +263,10 @@ export function useGitGutter(
 					if (rangeIndex === -1) return;
 
 					// Toggle: clicking same range closes, clicking different opens
-					if (peekWidget!.openIndex === rangeIndex) {
-						peekWidget!.close();
+					if (peekWidget?.openIndex === rangeIndex) {
+						peekWidget?.close();
 					} else {
-						peekWidget!.open(currentRanges, rangeIndex);
+						peekWidget?.open(currentRanges, rangeIndex);
 					}
 				});
 			}
@@ -314,5 +322,5 @@ export function useGitGutter(
 				collectionRef.current = null;
 			}
 		};
-	}, [workspaceId, filePath, editorRef, monacoRef, isDark, editorReady]);
+	}, [workspaceId, filePath, editorRef, monacoRef, isDark]);
 }

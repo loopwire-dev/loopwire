@@ -15,33 +15,43 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check README coverage for key directories
+      - name: Check in-code documentation coverage
         shell: bash
         run: |
           set -euo pipefail
 
-          targets=(
-            ".github"
-            "apps"
-            "apps/web"
-            "apps/daemon"
-            "apps/daemon/crates"
-            "packages"
-            "packages/types"
-            "scripts"
+          mapfile -t source_files < <(
+            find apps packages -type f \( \
+              -name "*.rs" -o -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" \
+            \) \
+              -not -path "*/node_modules/*" \
+              -not -path "*/dist/*" \
+              -not -path "*/coverage/*" \
+              -not -path "*/target/*" \
+              -not -path "*/generated/*" \
+              -not -name "*.test.ts" \
+              -not -name "*.test.tsx" \
+              -not -name "*.spec.ts" \
+              -not -name "*.spec.tsx" \
+              | sort
           )
 
-          total=${#targets[@]}
+          total=${#source_files[@]}
           documented=0
-          missing=()
+          undocumented=()
 
-          for dir in "${targets[@]}"; do
-            if [[ -f "$dir/README.md" ]]; then
+          for file in "${source_files[@]}"; do
+            if grep -Eq '(^[[:space:]]*///|^[[:space:]]*//!|/\*\*)' "$file"; then
               documented=$((documented + 1))
             else
-              missing+=("$dir/README.md")
+              undocumented+=("$file")
             fi
           done
+
+          if (( total == 0 )); then
+            echo "No source files found for docs coverage."
+            exit 1
+          fi
 
           coverage=$(( documented * 100 / total ))
           echo "Docs coverage: ${documented}/${total} (${coverage}%)"
@@ -49,18 +59,18 @@ jobs:
           {
             echo "## Docs Coverage"
             echo ""
-            echo "- Coverage: **${documented}/${total} (${coverage}%)**"
-            if (( ${#missing[@]} > 0 )); then
+            echo "- In-code docs coverage: **${documented}/${total} (${coverage}%)**"
+            if (( ${#undocumented[@]} > 0 )); then
               echo ""
-              echo "### Missing READMEs"
-              for item in "${missing[@]}"; do
+              echo "### Undocumented Source Files (first 50)"
+              for item in "${undocumented[@]:0:50}"; do
                 echo "- \`${item}\`"
               done
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-          # Keep docs coverage strict for key project areas.
-          if (( coverage < 100 )); then
-            echo "Docs coverage below required threshold (100%)."
+          # Require baseline in-code documentation coverage.
+          if (( coverage < 10 )); then
+            echo "In-code docs coverage below required threshold (10%)."
             exit 1
           fi

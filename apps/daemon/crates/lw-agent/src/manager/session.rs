@@ -363,8 +363,8 @@ impl AgentManager {
 
         // If the session is stopped but has a conversation_id, we can re-spawn
         // it below. Only bail for sessions that are truly unrecoverable.
-        let is_active = handle.status == AgentStatus::Running
-            || handle.status == AgentStatus::Restored;
+        let is_active =
+            handle.status == AgentStatus::Running || handle.status == AgentStatus::Restored;
         if !is_active && handle.conversation_id.is_none() {
             anyhow::bail!("Session is not running and has no conversation to resume");
         }
@@ -386,9 +386,7 @@ impl AgentManager {
         // If already marked unresumable, a previous attempt already fell back
         // to a fresh session.  Just re-launch fresh again.
         if handle.resumability_status == ResumabilityStatus::Unresumable {
-            return self
-                .spawn_fresh_for_session(session_id, &handle)
-                .await;
+            return self.spawn_fresh_for_session(session_id, &handle).await;
         }
 
         // PTY is gone or stopped — re-spawn the agent process, resuming its
@@ -416,7 +414,10 @@ impl AgentManager {
         .await?;
 
         let session = self.pty_manager.get(session_id).await.map_err(|_| {
-            anyhow::anyhow!("Failed to re-attach PTY after re-spawning agent {}", session_id)
+            anyhow::anyhow!(
+                "Failed to re-attach PTY after re-spawning agent {}",
+                session_id
+            )
         })?;
 
         self.recorder
@@ -482,9 +483,8 @@ impl AgentManager {
             h.process_id = process_id;
             h.status = AgentStatus::Running;
             h.resumability_status = ResumabilityStatus::Unresumable;
-            h.resume_failure_reason = Some(
-                "Previous conversation could not be resumed — started a fresh session".into(),
-            );
+            h.resume_failure_reason =
+                Some("Previous conversation could not be resumed — started a fresh session".into());
         }
 
         self.recorder
@@ -693,12 +693,8 @@ mod tests {
 
     #[test]
     fn launch_for_start_gemini_passes_through() {
-        let (cmd, args) = launch_for_start(
-            AgentType::Gemini,
-            "gemini".to_string(),
-            vec![],
-            "conv-789",
-        );
+        let (cmd, args) =
+            launch_for_start(AgentType::Gemini, "gemini".to_string(), vec![], "conv-789");
         assert_eq!(cmd, "gemini");
         assert!(args.is_empty());
     }
@@ -851,10 +847,7 @@ mod tests {
     fn agent_handle_contains_expected_fields() {
         let handle = make_handle();
         let value: serde_json::Value = serde_json::to_value(&handle).unwrap();
-        assert_eq!(
-            value["session_id"],
-            "00000000-0000-0000-0000-000000000000"
-        );
+        assert_eq!(value["session_id"], "00000000-0000-0000-0000-000000000000");
         assert_eq!(value["agent_type"], "claude_code");
         assert_eq!(value["status"], "running");
         assert_eq!(value["pinned"], false);

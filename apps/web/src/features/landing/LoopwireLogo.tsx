@@ -9,7 +9,8 @@ export function LoopwireLogo({
 	className?: string;
 	mode?: "auto" | "light" | "dark";
 }) {
-	const modeClass = mode === "dark" ? "invert" : mode === "auto" ? "dark:invert" : "";
+	const modeClass =
+		mode === "dark" ? "invert" : mode === "auto" ? "dark:invert" : "";
 
 	return (
 		<img

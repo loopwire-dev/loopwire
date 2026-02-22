@@ -74,7 +74,8 @@ export function useDaemonAvailable(
 			if (cancelled) return;
 
 			const existingUrl = getDaemonUrl();
-			const daemonUrl = existingUrl || (allowDiscovery ? await discoverDaemon() : null);
+			const daemonUrl =
+				existingUrl || (allowDiscovery ? await discoverDaemon() : null);
 			if (cancelled) return;
 
 			if (!daemonUrl) {

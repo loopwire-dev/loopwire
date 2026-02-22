@@ -16,7 +16,6 @@ function activityLabel(phase: AgentActivityPhase): string {
 			return "Processing";
 		case "streaming_output":
 			return "Streaming output";
-		case "unknown":
 		default:
 			return "Unknown state";
 	}
@@ -44,7 +43,10 @@ export function AgentActivityIcon({
 		case "processing":
 			return (
 				<span aria-label={label} title={label}>
-					<Loader2 size={14} className={`${className} animate-spin text-amber-500`} />
+					<Loader2
+						size={14}
+						className={`${className} animate-spin text-amber-500`}
+					/>
 				</span>
 			);
 		case "streaming_output":
@@ -53,7 +55,6 @@ export function AgentActivityIcon({
 					<Activity size={14} className={`${className} text-sky-500`} />
 				</span>
 			);
-		case "unknown":
 		default:
 			return (
 				<span aria-label={label} title={label}>

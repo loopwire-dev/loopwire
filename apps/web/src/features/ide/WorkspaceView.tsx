@@ -1,20 +1,22 @@
 import { useEffect, useMemo } from "react";
 import {
-	workspaceStoreKeyForSelection,
-	useAppStore,
 	type WorkspacePanel,
+	useAppStore,
+	workspaceStoreKeyForSelection,
 } from "../../shared/stores/app-store";
 import { InlineAgentPicker } from "../agent/InlineAgentPicker";
 import { Terminal } from "../terminal/Terminal";
-import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import { FilesPanelView } from "./FilesPanelView";
 import { GitPanelView } from "./GitPanelView";
+import { WorkspaceSidebar } from "./WorkspaceSidebar";
 
 export function WorkspaceView() {
 	const workspacePath = useAppStore((s) => s.workspacePath);
 	const workspaceId = useAppStore((s) => s.workspaceId);
 	const sessionsByWorkspacePath = useAppStore((s) => s.sessionsByWorkspacePath);
-	const activePanelByWorkspacePath = useAppStore((s) => s.activePanelByWorkspacePath);
+	const activePanelByWorkspacePath = useAppStore(
+		(s) => s.activePanelByWorkspacePath,
+	);
 	const workspaceKey = useMemo(
 		() => workspaceStoreKeyForSelection(workspaceId, workspacePath),
 		[workspaceId, workspacePath],
@@ -25,16 +27,22 @@ export function WorkspaceView() {
 		return sessionsByWorkspacePath[workspaceKey] ?? [];
 	}, [workspaceKey, sessionsByWorkspacePath]);
 	const sessionsInDisplayOrder = useMemo(() => {
-		const byOrder = (a: (typeof sessions)[number], b: (typeof sessions)[number]) => {
+		const byOrder = (
+			a: (typeof sessions)[number],
+			b: (typeof sessions)[number],
+		) => {
 			const aHas = a.sortOrder != null;
 			const bHas = b.sortOrder != null;
-			if (aHas && bHas) return (a.sortOrder as number) - (b.sortOrder as number);
+			if (aHas && bHas)
+				return (a.sortOrder as number) - (b.sortOrder as number);
 			if (aHas) return -1;
 			if (bHas) return 1;
 			return a.createdAt.localeCompare(b.createdAt);
 		};
 		const pinned = sessions.filter((session) => session.pinned).sort(byOrder);
-		const unpinned = sessions.filter((session) => !session.pinned).sort(byOrder);
+		const unpinned = sessions
+			.filter((session) => !session.pinned)
+			.sort(byOrder);
 		return [...pinned, ...unpinned];
 	}, [sessions]);
 
@@ -49,7 +57,10 @@ export function WorkspaceView() {
 			const session = sessionsInDisplayOrder[digit - 1];
 			if (!session) return;
 			e.preventDefault();
-			setActivePanel(workspacePath, { kind: "agent", sessionId: session.sessionId });
+			setActivePanel(workspacePath, {
+				kind: "agent",
+				sessionId: session.sessionId,
+			});
 		}
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
@@ -70,7 +81,11 @@ export function WorkspaceView() {
 	const content = (() => {
 		switch (activePanel.kind) {
 			case "panel":
-				return activePanel.panel === "git" ? <GitPanelView /> : <FilesPanelView />;
+				return activePanel.panel === "git" ? (
+					<GitPanelView />
+				) : (
+					<FilesPanelView />
+				);
 			case "agent":
 				return (
 					<Terminal

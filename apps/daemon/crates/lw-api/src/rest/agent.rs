@@ -499,10 +499,7 @@ pub async fn session_scrollback(
         })?;
 
     Ok(Json(ScrollbackResponse {
-        data: base64::Engine::encode(
-            &base64::engine::general_purpose::STANDARD,
-            &result.data,
-        ),
+        data: base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &result.data),
         start_offset: result.start_offset,
         end_offset: result.end_offset,
         has_more: result.has_more,

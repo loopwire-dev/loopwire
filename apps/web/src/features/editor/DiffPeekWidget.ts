@@ -28,10 +28,7 @@ export class DiffPeekWidget {
 	private totalHeight = 0;
 	private afterLine = 0;
 
-	constructor(
-		editor: Monaco.editor.IStandaloneCodeEditor,
-		_isDark: boolean,
-	) {
+	constructor(editor: Monaco.editor.IStandaloneCodeEditor, _isDark: boolean) {
 		this.editor = editor;
 	}
 
@@ -131,7 +128,10 @@ export class DiffPeekWidget {
 			body.appendChild(row);
 		}
 
-		if (range.content.oldLines.length === 0 && range.content.newLines.length === 0) {
+		if (
+			range.content.oldLines.length === 0 &&
+			range.content.newLines.length === 0
+		) {
 			const empty = document.createElement("div");
 			empty.className = "diff-peek-line";
 			empty.textContent = "  (no content)";
@@ -141,13 +141,16 @@ export class DiffPeekWidget {
 		overlay.appendChild(body);
 
 		// Compute height: header 30px + body lines capped at 300px
-		const lineCount = range.content.oldLines.length + range.content.newLines.length;
+		const lineCount =
+			range.content.oldLines.length + range.content.newLines.length;
 		const bodyHeight = Math.min(Math.max(lineCount, 1) * 20, 300);
 		this.totalHeight = 30 + bodyHeight + 2; // 2px for borders
 
 		// Append overlay to the editor's overflow-guard (above all Monaco layers)
 		const editorDom = this.editor.getDomNode();
-		const overflowGuard = editorDom?.querySelector(".overflow-guard") as HTMLElement | null;
+		const overflowGuard = editorDom?.querySelector(
+			".overflow-guard",
+		) as HTMLElement | null;
 		if (overflowGuard) {
 			overflowGuard.appendChild(overlay);
 		}

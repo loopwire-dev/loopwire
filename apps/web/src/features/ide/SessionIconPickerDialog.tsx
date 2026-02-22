@@ -80,9 +80,7 @@ export function SessionIconPickerDialog({
 	const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
 	const [crop, setCrop] = useState({ x: 0, y: 0 });
 	const [zoom, setZoom] = useState(1);
-	const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(
-		null,
-	);
+	const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
 	const [useThemeMask, setUseThemeMask] = useState(true);
 	const resetCropState = useCallback(() => {
 		setCropImageSrc(null);
@@ -187,11 +185,7 @@ export function SessionIconPickerDialog({
 							) : iconDraft ? (
 								<span className="text-sm leading-none">{iconDraft}</span>
 							) : defaultIcon ? (
-								<img
-									src={defaultIcon}
-									alt=""
-									className="h-3.5 w-3.5"
-								/>
+								<img src={defaultIcon} alt="" className="h-3.5 w-3.5" />
 							) : (
 								<span className="h-3.5 w-3.5 rounded-full bg-muted/30 inline-block" />
 							)}

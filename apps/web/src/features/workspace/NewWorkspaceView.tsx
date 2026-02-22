@@ -14,7 +14,10 @@ export function NewWorkspaceView() {
 		setWorkspacePath(path);
 		setBrowsingForWorkspace(false);
 		try {
-			const res = await api.post<{ workspace_id: string }>("/workspaces/register", { path });
+			const res = await api.post<{ workspace_id: string }>(
+				"/workspaces/register",
+				{ path },
+			);
 			setWorkspace(path, res.workspace_id);
 		} catch {
 			// Workspace will work without ID, just no file tree

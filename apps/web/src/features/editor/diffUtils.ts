@@ -111,7 +111,9 @@ export function stripDiffPath(raw: string): string | null {
 	return trimmed;
 }
 
-export function parseHunkHeader(header: string): { oldStart: number; newStart: number } | null {
+export function parseHunkHeader(
+	header: string,
+): { oldStart: number; newStart: number } | null {
 	const match = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(header);
 	if (!match) return null;
 	const oldStartRaw = match[1];
@@ -136,7 +138,8 @@ export function parseUnifiedPatch(patch: string): DiffFile[] {
 	const pushCurrentFile = () => {
 		if (!currentFile) return;
 		if (!currentFile.path) {
-			currentFile.path = currentFile.newPath ?? currentFile.oldPath ?? "Unknown file";
+			currentFile.path =
+				currentFile.newPath ?? currentFile.oldPath ?? "Unknown file";
 		}
 		if (currentFile.oldPath === null && currentFile.newPath !== null) {
 			currentFile.status = "added";
@@ -193,7 +196,8 @@ export function parseUnifiedPatch(patch: string): DiffFile[] {
 		}
 		if (!currentHunk && line.startsWith("+++ ")) {
 			currentFile.newPath = stripDiffPath(line.slice(4));
-			currentFile.path = currentFile.newPath ?? currentFile.oldPath ?? currentFile.path;
+			currentFile.path =
+				currentFile.newPath ?? currentFile.oldPath ?? currentFile.path;
 			continue;
 		}
 		if (line.startsWith("@@")) {

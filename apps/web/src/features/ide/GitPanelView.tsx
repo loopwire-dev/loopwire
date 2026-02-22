@@ -1,4 +1,11 @@
-import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, RefreshCw, Search } from "lucide-react";
+import {
+	ChevronDown,
+	ChevronRight,
+	ChevronsDownUp,
+	ChevronsUpDown,
+	RefreshCw,
+	Search,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, api } from "../../shared/lib/api";
 import { useAppStore } from "../../shared/stores/app-store";
@@ -83,7 +90,10 @@ function clearUnifiedWorkspaceCaches(workspaceId: string): void {
 	}
 }
 
-function unifiedFileCacheKey(workspaceId: string, relativePath: string): string {
+function unifiedFileCacheKey(
+	workspaceId: string,
+	relativePath: string,
+): string {
 	return `${workspaceId}::${relativePath}`;
 }
 
@@ -184,9 +194,15 @@ function stripMarker(content: string): string {
 	return content;
 }
 
-function buildUnifiedLines(file: DiffFile, currentContent: string): UnifiedLine[] {
+function buildUnifiedLines(
+	file: DiffFile,
+	currentContent: string,
+): UnifiedLine[] {
 	const additionsByNewLine = new Set<number>();
-	const deletionsByAnchor = new Map<number, { content: string; oldLine: number | null }[]>();
+	const deletionsByAnchor = new Map<
+		number,
+		{ content: string; oldLine: number | null }[]
+	>();
 
 	for (const hunk of file.hunks) {
 		for (const line of hunk.lines) {
@@ -244,7 +260,10 @@ function fileEntryKey(path: string, index: number): string {
 	return `${path}::${index}`;
 }
 
-function splitLineMarker(type: DiffLineType): { marker: string; markerClass: string } {
+function splitLineMarker(type: DiffLineType): {
+	marker: string;
+	markerClass: string;
+} {
 	if (type === "addition") {
 		return { marker: "+", markerClass: "text-green-700 dark:text-green-400" };
 	}
@@ -313,6 +332,8 @@ function SplitVirtualizedLines({
 	useEffect(() => {
 		const element = containerRef.current;
 		if (!element) return;
+		void rowKeyPrefix;
+		void lines.length;
 		element.scrollTop = 0;
 		setScrollTop(0);
 	}, [rowKeyPrefix, lines.length]);
@@ -340,7 +361,11 @@ function SplitVirtualizedLines({
 					minWidth: "100%",
 				}}
 			>
-				<div style={{ transform: `translateY(${startIndex * SPLIT_ROW_HEIGHT_PX}px)` }}>
+				<div
+					style={{
+						transform: `translateY(${startIndex * SPLIT_ROW_HEIGHT_PX}px)`,
+					}}
+				>
 					{visibleLines.map((line, offset) => {
 						const index = startIndex + offset;
 						return (
@@ -370,53 +395,55 @@ function renderSplitHunks({
 		);
 	}
 
-		return (
-			<>
-				{file.hunks.map((hunk, hunkIndex) => {
-					const hunkKey = `${fileKey}::${hunkIndex}`;
-					const hunkCollapsed = Boolean(collapsedHunkKeys[hunkKey]);
-					return (
-						<div
-							key={`${fileKey}-hunk-${hunkIndex}`}
-							className="border-b border-border last:border-b-0 [content-visibility:auto] [contain-intrinsic-size:280px]"
-						>
-							<div className="flex items-center justify-between border-b border-border bg-surface-overlay/70 px-3 py-1.5 font-mono text-[11px] text-muted">
-								<span>{hunk.header}</span>
-								<button
-									type="button"
-									onClick={() => onToggleHunk(hunkKey)}
-									className="inline-flex items-center rounded border border-border px-1 py-0.5 text-[10px] hover:bg-surface-overlay"
-									title={hunkCollapsed ? "Expand hunk" : "Collapse hunk"}
-								>
-									{hunkCollapsed ? (
-										<ChevronRight className="h-3 w-3" />
-									) : (
-										<ChevronDown className="h-3 w-3" />
-									)}
-								</button>
-							</div>
-							{!hunkCollapsed &&
-								(hunk.lines.length > SPLIT_VIRTUALIZE_THRESHOLD ? (
-									<SplitVirtualizedLines
-										lines={hunk.lines}
-										rowKeyPrefix={`${fileKey}-hunk-${hunkIndex}`}
-									/>
+	return (
+		<>
+			{file.hunks.map((hunk) => {
+				const firstLine = hunk.lines[0];
+				const hunkIdentity = `${hunk.header}::${firstLine?.oldLine ?? "n"}::${firstLine?.newLine ?? "n"}`;
+				const hunkKey = `${fileKey}::${hunkIdentity}`;
+				const hunkCollapsed = Boolean(collapsedHunkKeys[hunkKey]);
+				return (
+					<div
+						key={hunkKey}
+						className="border-b border-border last:border-b-0 [content-visibility:auto] [contain-intrinsic-size:280px]"
+					>
+						<div className="flex items-center justify-between border-b border-border bg-surface-overlay/70 px-3 py-1.5 font-mono text-[11px] text-muted">
+							<span>{hunk.header}</span>
+							<button
+								type="button"
+								onClick={() => onToggleHunk(hunkKey)}
+								className="inline-flex items-center rounded border border-border px-1 py-0.5 text-[10px] hover:bg-surface-overlay"
+								title={hunkCollapsed ? "Expand hunk" : "Collapse hunk"}
+							>
+								{hunkCollapsed ? (
+									<ChevronRight className="h-3 w-3" />
 								) : (
-									<div className="font-mono text-xs">
-										{hunk.lines.map((line, lineIndex) => (
-											<SplitLineRow
-												key={`${fileKey}-line-${hunkIndex}-${lineIndex}`}
-												line={line}
-											/>
-										))}
-									</div>
-								))}
+									<ChevronDown className="h-3 w-3" />
+								)}
+							</button>
 						</div>
-					);
-				})}
-			</>
-		);
-	}
+						{!hunkCollapsed &&
+							(hunk.lines.length > SPLIT_VIRTUALIZE_THRESHOLD ? (
+								<SplitVirtualizedLines
+									lines={hunk.lines}
+									rowKeyPrefix={hunkKey}
+								/>
+							) : (
+								<div className="font-mono text-xs">
+									{hunk.lines.map((line) => (
+										<SplitLineRow
+											key={`${hunkKey}-${line.oldLine ?? "n"}-${line.newLine ?? "n"}-${line.content}`}
+											line={line}
+										/>
+									))}
+								</div>
+							))}
+					</div>
+				);
+			})}
+		</>
+	);
+}
 
 function UnifiedVirtualizedLines({
 	lines,
@@ -448,6 +475,8 @@ function UnifiedVirtualizedLines({
 	useEffect(() => {
 		const element = containerRef.current;
 		if (!element) return;
+		void rowKeyPrefix;
+		void lines.length;
 		element.scrollTop = 0;
 		setScrollTop(0);
 	}, [rowKeyPrefix, lines.length]);
@@ -458,7 +487,8 @@ function UnifiedVirtualizedLines({
 		Math.floor(scrollTop / UNIFIED_ROW_HEIGHT_PX) - UNIFIED_OVERSCAN_ROWS,
 	);
 	const visibleCount =
-		Math.ceil(viewportHeight / UNIFIED_ROW_HEIGHT_PX) + UNIFIED_OVERSCAN_ROWS * 2;
+		Math.ceil(viewportHeight / UNIFIED_ROW_HEIGHT_PX) +
+		UNIFIED_OVERSCAN_ROWS * 2;
 	const endIndex = Math.min(lines.length, startIndex + visibleCount);
 	const visibleLines = lines.slice(startIndex, endIndex);
 
@@ -475,35 +505,44 @@ function UnifiedVirtualizedLines({
 					minWidth: "100%",
 				}}
 			>
-				<div style={{ transform: `translateY(${startIndex * UNIFIED_ROW_HEIGHT_PX}px)` }}>
-						{visibleLines.map((line, offset) => {
-							const index = startIndex + offset;
-							const marker = line.type === "addition" ? "+" : line.type === "deletion" ? "-" : "";
-							const markerClass =
-								line.type === "addition"
-									? "text-green-700 dark:text-green-400"
-									: line.type === "deletion"
-										? "text-red-700 dark:text-red-400"
-										: "text-muted";
-							return (
-								<div
-									key={`${rowKeyPrefix}-unified-line-${index}`}
-									className={`grid h-6 grid-cols-[4.5rem_1.5rem_minmax(0,1fr)] ${lineBackground(line.type)}`}
+				<div
+					style={{
+						transform: `translateY(${startIndex * UNIFIED_ROW_HEIGHT_PX}px)`,
+					}}
+				>
+					{visibleLines.map((line, offset) => {
+						const index = startIndex + offset;
+						const marker =
+							line.type === "addition"
+								? "+"
+								: line.type === "deletion"
+									? "-"
+									: "";
+						const markerClass =
+							line.type === "addition"
+								? "text-green-700 dark:text-green-400"
+								: line.type === "deletion"
+									? "text-red-700 dark:text-red-400"
+									: "text-muted";
+						return (
+							<div
+								key={`${rowKeyPrefix}-unified-line-${index}`}
+								className={`grid h-6 grid-cols-[4.5rem_1.5rem_minmax(0,1fr)] ${lineBackground(line.type)}`}
+							>
+								<span className="border-r border-border/80 px-2 py-0.5 text-right text-[10px] text-muted">
+									{line.type === "deletion"
+										? (line.oldLine ?? "")
+										: (line.lineNumber ?? "")}
+								</span>
+								<span
+									className={`flex h-full items-center justify-center border-r border-border/80 text-center text-[11px] font-semibold leading-none ${markerClass}`}
 								>
-									<span className="border-r border-border/80 px-2 py-0.5 text-right text-[10px] text-muted">
-										{line.type === "deletion"
-											? (line.oldLine ?? "")
-											: (line.lineNumber ?? "")}
-									</span>
-										<span
-											className={`flex h-full items-center justify-center border-r border-border/80 text-center text-[11px] font-semibold leading-none ${markerClass}`}
-										>
-											{marker}
-										</span>
-									<pre className="m-0 whitespace-pre px-2 py-0.5 leading-5">
-										{line.content}
-									</pre>
-								</div>
+									{marker}
+								</span>
+								<pre className="m-0 whitespace-pre px-2 py-0.5 leading-5">
+									{line.content}
+								</pre>
+							</div>
 						);
 					})}
 				</div>
@@ -515,14 +554,20 @@ function UnifiedVirtualizedLines({
 export function GitPanelView() {
 	const workspaceId = useAppStore((s) => s.workspaceId);
 	const initialDiffLoadRef = useRef<string | null>(null);
-	const unifiedLinesCacheRef = useRef<Map<string, UnifiedLinesCacheEntry>>(new Map());
+	const unifiedLinesCacheRef = useRef<Map<string, UnifiedLinesCacheEntry>>(
+		new Map(),
+	);
 	const [files, setFiles] = useState<DiffFile[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [updatedAt, setUpdatedAt] = useState<string | null>(null);
 	const [selectedFileKey, setSelectedFileKey] = useState<string>(ALL_FILES_KEY);
-	const [collapsedFileKeys, setCollapsedFileKeys] = useState<Record<string, boolean>>({});
-	const [collapsedHunkKeys, setCollapsedHunkKeys] = useState<Record<string, boolean>>({});
+	const [collapsedFileKeys, setCollapsedFileKeys] = useState<
+		Record<string, boolean>
+	>({});
+	const [collapsedHunkKeys, setCollapsedHunkKeys] = useState<
+		Record<string, boolean>
+	>({});
 	const [viewMode, setViewMode] = useState<DiffViewMode>("split");
 	const [fileFilter, setFileFilter] = useState("");
 	const [unifiedContentByPath, setUnifiedContentByPath] = useState<
@@ -541,12 +586,16 @@ export function GitPanelView() {
 	const filteredFilesWithKeys = useMemo(() => {
 		if (!fileFilter) return filesWithKeys;
 		const lower = fileFilter.toLowerCase();
-		return filesWithKeys.filter(({ file }) => file.path.toLowerCase().includes(lower));
+		return filesWithKeys.filter(({ file }) =>
+			file.path.toLowerCase().includes(lower),
+		);
 	}, [filesWithKeys, fileFilter]);
 
 	useEffect(() => {
 		if (selectedFileKey === ALL_FILES_KEY) return;
-		const stillExists = filesWithKeys.some((entry) => entry.key === selectedFileKey);
+		const stillExists = filesWithKeys.some(
+			(entry) => entry.key === selectedFileKey,
+		);
 		if (!stillExists) {
 			setSelectedFileKey(ALL_FILES_KEY);
 		}
@@ -602,36 +651,42 @@ export function GitPanelView() {
 		[],
 	);
 
-	const loadDiff = useCallback(async (options?: { force?: boolean }) => {
-		if (!workspaceId) {
-			setFiles([]);
-			setError("Workspace is not registered yet.");
-			return;
-		}
-
-		setLoading(true);
-		setError(null);
-		try {
-			const response = await fetchGitDiff(workspaceId, options?.force ?? false);
-			clearUnifiedWorkspaceCaches(workspaceId);
-			setUnifiedContentByPath({});
-			unifiedLinesCacheRef.current.clear();
-			setFiles(parseUnifiedPatch(response.patch));
-			setUpdatedAt(new Date().toLocaleTimeString());
-		} catch (err) {
-			if (err instanceof ApiError) {
-				if (err.code === "NOT_GIT_REPO") {
-					setError("This workspace is not a Git repository.");
-				} else {
-					setError(err.message);
-				}
-			} else {
-				setError("Failed to load Git diff.");
+	const loadDiff = useCallback(
+		async (options?: { force?: boolean }) => {
+			if (!workspaceId) {
+				setFiles([]);
+				setError("Workspace is not registered yet.");
+				return;
 			}
-		} finally {
-			setLoading(false);
-		}
-	}, [workspaceId]);
+
+			setLoading(true);
+			setError(null);
+			try {
+				const response = await fetchGitDiff(
+					workspaceId,
+					options?.force ?? false,
+				);
+				clearUnifiedWorkspaceCaches(workspaceId);
+				setUnifiedContentByPath({});
+				unifiedLinesCacheRef.current.clear();
+				setFiles(parseUnifiedPatch(response.patch));
+				setUpdatedAt(new Date().toLocaleTimeString());
+			} catch (err) {
+				if (err instanceof ApiError) {
+					if (err.code === "NOT_GIT_REPO") {
+						setError("This workspace is not a Git repository.");
+					} else {
+						setError(err.message);
+					}
+				} else {
+					setError("Failed to load Git diff.");
+				}
+			} finally {
+				setLoading(false);
+			}
+		},
+		[workspaceId],
+	);
 
 	useEffect(() => {
 		if (!workspaceId) return;
@@ -724,12 +779,13 @@ export function GitPanelView() {
 				<div>
 					<p className="text-sm font-semibold">Git Diff</p>
 					<p className="text-xs text-muted">
-						{filesWithKeys.length} changed file{filesWithKeys.length === 1 ? "" : "s"}
+						{filesWithKeys.length} changed file
+						{filesWithKeys.length === 1 ? "" : "s"}
 						{updatedAt ? ` • updated ${updatedAt}` : ""}
 					</p>
 				</div>
-					<div className="flex items-center gap-2">
-						<div className="inline-flex rounded-md border border-border bg-surface p-0.5 gap-0.5 text-xs">
+				<div className="flex items-center gap-2">
+					<div className="inline-flex rounded-md border border-border bg-surface p-0.5 gap-0.5 text-xs">
 						<button
 							type="button"
 							onClick={() => setViewMode("split")}
@@ -751,32 +807,36 @@ export function GitPanelView() {
 							}`}
 						>
 							Unified
-							</button>
-						</div>
-						<button
-							type="button"
-							onClick={() => setAllVisibleCollapsed(!areAllVisibleFilesCollapsed)}
-							disabled={visibleFileKeys.length === 0}
-							className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs font-medium text-muted hover:bg-surface-overlay disabled:opacity-50 disabled:pointer-events-none"
-							title={areAllVisibleFilesCollapsed ? "Expand all" : "Collapse all"}
-							aria-label={areAllVisibleFilesCollapsed ? "Expand all" : "Collapse all"}
-						>
-							{areAllVisibleFilesCollapsed ? (
-								<ChevronsUpDown className="h-3.5 w-3.5" />
-							) : (
-								<ChevronsDownUp className="h-3.5 w-3.5" />
-							)}
 						</button>
-						<button
-							type="button"
-							onClick={() => void loadDiff({ force: true })}
-							disabled={loading}
-							className="inline-flex items-center rounded-md border border-border bg-surface p-1.5 text-xs font-medium text-muted hover:bg-surface-overlay disabled:opacity-50 disabled:pointer-events-none"
-							title="Refresh"
-							aria-label="Refresh"
-						>
-							<RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-						</button>
+					</div>
+					<button
+						type="button"
+						onClick={() => setAllVisibleCollapsed(!areAllVisibleFilesCollapsed)}
+						disabled={visibleFileKeys.length === 0}
+						className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs font-medium text-muted hover:bg-surface-overlay disabled:opacity-50 disabled:pointer-events-none"
+						title={areAllVisibleFilesCollapsed ? "Expand all" : "Collapse all"}
+						aria-label={
+							areAllVisibleFilesCollapsed ? "Expand all" : "Collapse all"
+						}
+					>
+						{areAllVisibleFilesCollapsed ? (
+							<ChevronsUpDown className="h-3.5 w-3.5" />
+						) : (
+							<ChevronsDownUp className="h-3.5 w-3.5" />
+						)}
+					</button>
+					<button
+						type="button"
+						onClick={() => void loadDiff({ force: true })}
+						disabled={loading}
+						className="inline-flex items-center rounded-md border border-border bg-surface p-1.5 text-xs font-medium text-muted hover:bg-surface-overlay disabled:opacity-50 disabled:pointer-events-none"
+						title="Refresh"
+						aria-label="Refresh"
+					>
+						<RefreshCw
+							className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
+						/>
+					</button>
 				</div>
 			</div>
 
@@ -819,14 +879,20 @@ export function GitPanelView() {
 										: "border-transparent hover:border-border hover:bg-surface-overlay/70"
 								}`}
 							>
-									<p className="font-mono text-[11px] leading-4 whitespace-normal break-all">{file.path}</p>
+								<p className="font-mono text-[11px] leading-4 whitespace-normal break-all">
+									{file.path}
+								</p>
 								<div className="mt-1 flex items-center justify-between text-[10px]">
 									<span className="uppercase tracking-[0.06em] text-muted">
 										{file.status}
 									</span>
 									<span className="font-mono">
-										<span className="text-green-700 dark:text-green-400">+{file.additions}</span>{" "}
-										<span className="text-red-700 dark:text-red-400">-{file.deletions}</span>
+										<span className="text-green-700 dark:text-green-400">
+											+{file.additions}
+										</span>{" "}
+										<span className="text-red-700 dark:text-red-400">
+											-{file.deletions}
+										</span>
 									</span>
 								</div>
 							</button>
@@ -868,18 +934,22 @@ export function GitPanelView() {
 									? getUnifiedLinesForFile(file, key, unifiedState)
 									: [];
 
-								return (
-									<section
-										key={key}
-										className="mb-3 overflow-hidden rounded-lg border border-border bg-surface [content-visibility:auto] [contain-intrinsic-size:720px]"
-									>
+							return (
+								<section
+									key={key}
+									className="mb-3 overflow-hidden rounded-lg border border-border bg-surface [content-visibility:auto] [contain-intrinsic-size:720px]"
+								>
 									<header className="flex items-center justify-between gap-3 border-b border-border bg-surface-raised px-3 py-2">
 										<div className="min-w-0 flex items-center gap-2">
 											<button
 												type="button"
 												onClick={() => toggleFileCollapsed(key)}
 												className="inline-flex shrink-0 items-center rounded border border-border px-1.5 py-1 text-[11px] text-muted hover:bg-surface-overlay"
-												title={fileCollapsed ? "Expand file diff" : "Collapse file diff"}
+												title={
+													fileCollapsed
+														? "Expand file diff"
+														: "Collapse file diff"
+												}
 											>
 												{fileCollapsed ? (
 													<ChevronRight className="h-3.5 w-3.5" />
@@ -888,7 +958,9 @@ export function GitPanelView() {
 												)}
 											</button>
 											<div className="min-w-0">
-												<p className="truncate font-mono text-xs">{file.path}</p>
+												<p className="truncate font-mono text-xs">
+													{file.path}
+												</p>
 												{file.status === "renamed" &&
 													file.oldPath &&
 													file.oldPath !== file.path && (
@@ -902,8 +974,12 @@ export function GitPanelView() {
 											<span className="rounded border border-border px-1.5 py-0.5 text-[10px] uppercase text-muted">
 												{file.status}
 											</span>
-											<span className="text-green-700 dark:text-green-400">+{file.additions}</span>
-											<span className="text-red-700 dark:text-red-400">-{file.deletions}</span>
+											<span className="text-green-700 dark:text-green-400">
+												+{file.additions}
+											</span>
+											<span className="text-red-700 dark:text-red-400">
+												-{file.deletions}
+											</span>
 										</div>
 									</header>
 
@@ -933,7 +1009,8 @@ export function GitPanelView() {
 
 											{viewMode === "unified" && file.status !== "deleted" && (
 												<>
-													{(unifiedState === undefined || unifiedState === UNIFIED_LOADING) && (
+													{(unifiedState === undefined ||
+														unifiedState === UNIFIED_LOADING) && (
 														<div className="px-3 py-2 text-xs text-muted">
 															Loading file content...
 														</div>

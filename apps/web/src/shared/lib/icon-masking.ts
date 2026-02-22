@@ -10,7 +10,9 @@ function splitDataUrl(url: string): { header: string; body: string } | null {
 	};
 }
 
-export function isDataImageUrl(value: string | null | undefined): value is string {
+export function isDataImageUrl(
+	value: string | null | undefined,
+): value is string {
 	return typeof value === "string" && /^data:image\//i.test(value);
 }
 

@@ -149,13 +149,7 @@ async fn handle_client_message(
 ) {
     let request_id = envelope.request_id.clone();
     if !authenticated {
-        send_error(
-            tx,
-            request_id,
-            "UNAUTHORIZED",
-            "Authentication required",
-        )
-        .await;
+        send_error(tx, request_id, "UNAUTHORIZED", "Authentication required").await;
         return;
     }
 
@@ -173,8 +167,7 @@ async fn handle_client_message(
                             tracing::info!("Watching {}/{}", wid, relative_path);
                         }
                         Err(err) => {
-                            send_error(tx, request_id, "FS_WATCH_ERROR", &err.to_string())
-                                .await;
+                            send_error(tx, request_id, "FS_WATCH_ERROR", &err.to_string()).await;
                         }
                     }
                 } else {
@@ -218,7 +211,13 @@ async fn handle_client_message(
             let root = match state.workspace_registry.get_root(&wid).await {
                 Ok(r) => r,
                 Err(_) => {
-                    send_error(tx, request_id, "WORKSPACE_NOT_REGISTERED", "Workspace not found").await;
+                    send_error(
+                        tx,
+                        request_id,
+                        "WORKSPACE_NOT_REGISTERED",
+                        "Workspace not found",
+                    )
+                    .await;
                     return;
                 }
             };
@@ -249,7 +248,8 @@ async fn handle_client_message(
 
                     // Compute git status on a blocking thread
                     let root = root_clone.clone();
-                    let result = tokio::task::spawn_blocking(move || compute_git_status(&root)).await;
+                    let result =
+                        tokio::task::spawn_blocking(move || compute_git_status(&root)).await;
 
                     let response = match result {
                         Ok(Ok(resp)) => resp,
@@ -321,8 +321,7 @@ mod tests {
 
     #[test]
     fn ws_query_deserialize_both_fields() {
-        let query: WsQuery =
-            serde_json::from_str(r#"{"token": "abc123", "probe": "1"}"#).unwrap();
+        let query: WsQuery = serde_json::from_str(r#"{"token": "abc123", "probe": "1"}"#).unwrap();
         assert_eq!(query.token, Some("abc123".to_string()));
         assert_eq!(query.probe, Some("1".to_string()));
     }

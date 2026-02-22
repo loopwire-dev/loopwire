@@ -1,7 +1,7 @@
-import { useAppStore } from "../../shared/stores/app-store";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import { FileTree } from "../workspace/FileTree";
+import { useAppStore } from "../../shared/stores/app-store";
 import { CodeEditor } from "../editor/CodeEditor";
+import { FileTree } from "../workspace/FileTree";
 
 export function FilesPanelView() {
 	const openFilePath = useAppStore((s) => s.openFilePath);

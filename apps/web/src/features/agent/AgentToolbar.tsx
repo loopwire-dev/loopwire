@@ -1,7 +1,7 @@
 import { Square } from "lucide-react";
-import { useAgent } from "./useAgent";
-import { AgentStatus } from "./AgentStatus";
 import type { WorkspaceSession } from "../../shared/stores/app-store";
+import { AgentStatus } from "./AgentStatus";
+import { useAgent } from "./useAgent";
 
 interface AgentToolbarProps {
 	session: WorkspaceSession;

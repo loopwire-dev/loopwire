@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
 	defaultAgentActivity,
 	workspaceStoreKeyForSelection,
@@ -52,9 +52,7 @@ describe("defaultAgentActivity", () => {
 
 describe("workspaceStoreKeyForSelection", () => {
 	it("returns id-prefixed key for valid workspace ID", () => {
-		expect(workspaceStoreKeyForSelection("ws-123", "/tmp")).toBe(
-			"id:ws-123",
-		);
+		expect(workspaceStoreKeyForSelection("ws-123", "/tmp")).toBe("id:ws-123");
 	});
 
 	it("returns id-prefixed key for UUID workspace ID", () => {
@@ -88,8 +86,6 @@ describe("workspaceStoreKeyForSelection", () => {
 
 	it("ignores workspace path parameter", () => {
 		expect(workspaceStoreKeyForSelection("ws-1", null)).toBe("id:ws-1");
-		expect(workspaceStoreKeyForSelection("ws-1", undefined)).toBe(
-			"id:ws-1",
-		);
+		expect(workspaceStoreKeyForSelection("ws-1", undefined)).toBe("id:ws-1");
 	});
 });

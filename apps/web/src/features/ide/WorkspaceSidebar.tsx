@@ -1,21 +1,21 @@
 import { Bot, FolderTree, GitBranch, MoreHorizontal, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-	type WorkspacePanel,
-	type WorkspaceSession,
-	workspaceStoreKeyForSelection,
-	useAppStore,
-} from "../../shared/stores/app-store";
-import {
 	isThemeMaskDisabled,
 	stripMaskMetadata,
 } from "../../shared/lib/icon-masking";
+import {
+	type WorkspacePanel,
+	type WorkspaceSession,
+	useAppStore,
+	workspaceStoreKeyForSelection,
+} from "../../shared/stores/app-store";
 import { AgentActivityIcon } from "../agent/AgentActivityIcon";
 import { getAgentIcon } from "../agent/agent-icons";
 import { useAgent } from "../agent/useAgent";
+import { useGitStatus } from "../workspace/useGitStatus";
 import { SessionContextMenu } from "./SessionContextMenu";
 import { SessionIconPickerDialog } from "./SessionIconPickerDialog";
-import { useGitStatus } from "../workspace/useGitStatus";
 
 function formatAgentName(agentType: string): string {
 	const labels: Record<string, string> = {
@@ -41,8 +41,7 @@ const TAB_HIGHLIGHT_BASE_CLASS =
 const TAB_ACTIVE_HIGHLIGHT_CLASS =
 	"border border-border bg-surface-raised/75 dark:bg-white/12";
 
-const TAB_HOVER_HIGHLIGHT_CLASS =
-	"bg-surface-raised/80 dark:bg-white/8";
+const TAB_HOVER_HIGHLIGHT_CLASS = "bg-surface-raised/80 dark:bg-white/8";
 
 interface WorkspaceSidebarProps {
 	sessions: WorkspaceSession[];
@@ -61,7 +60,11 @@ export function WorkspaceSidebar({
 	const reorderWorkspaceSession = useAppStore((s) => s.reorderWorkspaceSession);
 	const renameSessionCustomName = useAppStore((s) => s.renameSessionCustomName);
 	const updateSessionSettings = useAppStore((s) => s.updateSessionSettings);
-	const { stopSession, renameSession, updateSessionSettings: updateSessionSettingsApi } = useAgent();
+	const {
+		stopSession,
+		renameSession,
+		updateSessionSettings: updateSessionSettingsApi,
+	} = useAgent();
 
 	const [draggingSessionId, setDraggingSessionId] = useState<string | null>(
 		null,
@@ -73,24 +76,30 @@ export function WorkspaceSidebar({
 	const [editingName, setEditingName] = useState("");
 	const [menuSessionId, setMenuSessionId] = useState<string | null>(null);
 	const menuAnchorRef = useRef<HTMLButtonElement | null>(null);
-	const [iconPickerSessionId, setIconPickerSessionId] = useState<string | null>(null);
+	const [iconPickerSessionId, setIconPickerSessionId] = useState<string | null>(
+		null,
+	);
 
-	const sortByOrder = (a: WorkspaceSession, b: WorkspaceSession) => {
-		const aHas = a.sortOrder != null;
-		const bHas = b.sortOrder != null;
-		if (aHas && bHas) return (a.sortOrder as number) - (b.sortOrder as number);
-		if (aHas) return -1;
-		if (bHas) return 1;
-		return a.createdAt.localeCompare(b.createdAt);
-	};
+	const sortByOrder = useCallback(
+		(a: WorkspaceSession, b: WorkspaceSession) => {
+			const aHas = a.sortOrder != null;
+			const bHas = b.sortOrder != null;
+			if (aHas && bHas)
+				return (a.sortOrder as number) - (b.sortOrder as number);
+			if (aHas) return -1;
+			if (bHas) return 1;
+			return a.createdAt.localeCompare(b.createdAt);
+		},
+		[],
+	);
 
 	const pinnedSessions = useMemo(
 		() => sessions.filter((s) => s.pinned).sort(sortByOrder),
-		[sessions],
+		[sessions, sortByOrder],
 	);
 	const unpinnedSessions = useMemo(
 		() => sessions.filter((s) => !s.pinned).sort(sortByOrder),
-		[sessions],
+		[sessions, sortByOrder],
 	);
 
 	const labelsBySessionId = useMemo(() => {
@@ -157,7 +166,8 @@ export function WorkspaceSidebar({
 		const handlePointerDown = (event: PointerEvent) => {
 			const target = event.target as HTMLElement | null;
 			if (target?.closest("[data-session-menu='true']")) return;
-			if (target?.closest(`[data-menu-button-session-id='${menuSessionId}']`)) return;
+			if (target?.closest(`[data-menu-button-session-id='${menuSessionId}']`))
+				return;
 			setMenuSessionId(null);
 		};
 
@@ -201,11 +211,11 @@ export function WorkspaceSidebar({
 		activePanel.kind === "agent" && activePanel.sessionId === sessionId;
 
 	const menuSession = menuSessionId
-		? sessions.find((s) => s.sessionId === menuSessionId) ?? null
+		? (sessions.find((s) => s.sessionId === menuSessionId) ?? null)
 		: null;
 
 	const iconPickerSession = iconPickerSessionId
-		? sessions.find((s) => s.sessionId === iconPickerSessionId) ?? null
+		? (sessions.find((s) => s.sessionId === iconPickerSessionId) ?? null)
 		: null;
 
 	const handleTogglePin = useCallback(() => {
@@ -248,11 +258,11 @@ export function WorkspaceSidebar({
 	const renderSessionItem = (session: WorkspaceSession) => {
 		const active = isAgentActive(session.sessionId);
 		const label =
-			labelsBySessionId.get(session.sessionId) ??
-			getSessionBaseName(session);
+			labelsBySessionId.get(session.sessionId) ?? getSessionBaseName(session);
 		const isEditing = editingSessionId === session.sessionId;
 		const activityPhase = session.activity?.phase;
-		const showActivityIcon = activityPhase != null && activityPhase !== "unknown";
+		const showActivityIcon =
+			activityPhase != null && activityPhase !== "unknown";
 
 		return (
 			<div
@@ -297,7 +307,9 @@ export function WorkspaceSidebar({
 								? useAppStore.getState().sessionsByWorkspacePath[workspaceKey]
 								: undefined) ?? [];
 						for (const s of updatedSessions) {
-							void updateSessionSettingsApi(s.sessionId, { sort_order: s.sortOrder ?? null });
+							void updateSessionSettingsApi(s.sessionId, {
+								sort_order: s.sortOrder ?? null,
+							});
 						}
 					}
 					setDragOverSessionId(null);
@@ -324,6 +336,15 @@ export function WorkspaceSidebar({
 						setEditingSessionId(session.sessionId);
 						setEditingName(session.customName?.trim() ?? "");
 					}}
+					onKeyDown={(event) => {
+						if (event.key === "Enter" || event.key === " ") {
+							event.preventDefault();
+							selectPanel({
+								kind: "agent",
+								sessionId: session.sessionId,
+							});
+						}
+					}}
 				>
 					<span
 						aria-hidden="true"
@@ -338,7 +359,6 @@ export function WorkspaceSidebar({
 					</span>
 					{isEditing ? (
 						<input
-							autoFocus
 							type="text"
 							value={editingName}
 							onChange={(event) => setEditingName(event.target.value)}
@@ -379,7 +399,9 @@ export function WorkspaceSidebar({
 					) : null}
 					<button
 						type="button"
-						ref={menuSessionId === session.sessionId ? menuAnchorRef : undefined}
+						ref={
+							menuSessionId === session.sessionId ? menuAnchorRef : undefined
+						}
 						data-menu-button-session-id={session.sessionId}
 						onClick={(event) => {
 							event.stopPropagation();
@@ -547,7 +569,9 @@ export function WorkspaceSidebar({
 						: ""
 				}
 				currentIcon={iconPickerSession?.icon}
-				defaultIcon={iconPickerSession ? getAgentIcon(iconPickerSession.agentType) : null}
+				defaultIcon={
+					iconPickerSession ? getAgentIcon(iconPickerSession.agentType) : null
+				}
 				onConfirm={handleIconConfirm}
 				onClose={() => setIconPickerSessionId(null)}
 			/>

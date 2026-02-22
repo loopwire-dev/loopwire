@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
 	isDataImageUrl,
 	isThemeMaskDisabled,
@@ -46,9 +46,9 @@ describe("isDataImageUrl", () => {
 
 describe("isThemeMaskDisabled", () => {
 	it("returns true when lw-mask=none is present", () => {
-		expect(
-			isThemeMaskDisabled("data:image/png;lw-mask=none;base64,abc"),
-		).toBe(true);
+		expect(isThemeMaskDisabled("data:image/png;lw-mask=none;base64,abc")).toBe(
+			true,
+		);
 	});
 
 	it("returns false when no mask flag", () => {
@@ -56,9 +56,9 @@ describe("isThemeMaskDisabled", () => {
 	});
 
 	it("returns false for lw-mask=theme", () => {
-		expect(
-			isThemeMaskDisabled("data:image/png;lw-mask=theme;base64,abc"),
-		).toBe(false);
+		expect(isThemeMaskDisabled("data:image/png;lw-mask=theme;base64,abc")).toBe(
+			false,
+		);
 	});
 
 	it("returns false for non-data URL", () => {

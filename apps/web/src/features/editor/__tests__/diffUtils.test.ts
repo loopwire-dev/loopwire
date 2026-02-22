@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-	stripDiffPath,
 	parseHunkHeader,
 	parseUnifiedPatch,
+	stripDiffPath,
 } from "../diffUtils";
 
 // ── stripDiffPath ────────────────────────────────────────────────────
@@ -66,9 +66,7 @@ describe("parseHunkHeader", () => {
 	});
 
 	it("parses hunk header with context after @@", () => {
-		expect(
-			parseHunkHeader("@@ -5,10 +5,12 @@ function foo() {"),
-		).toEqual({
+		expect(parseHunkHeader("@@ -5,10 +5,12 @@ function foo() {")).toEqual({
 			oldStart: 5,
 			newStart: 5,
 		});
@@ -119,12 +117,12 @@ describe("parseUnifiedPatch", () => {
 
 		const files = parseUnifiedPatch(patch);
 		expect(files).toHaveLength(1);
-		expect(files[0]!.path).toBe("file.ts");
-		expect(files[0]!.status).toBe("modified");
-		expect(files[0]!.additions).toBe(1);
-		expect(files[0]!.deletions).toBe(1);
-		expect(files[0]!.hunks).toHaveLength(1);
-		expect(files[0]!.hunks[0]!.lines).toHaveLength(4);
+		expect(files[0]?.path).toBe("file.ts");
+		expect(files[0]?.status).toBe("modified");
+		expect(files[0]?.additions).toBe(1);
+		expect(files[0]?.deletions).toBe(1);
+		expect(files[0]?.hunks).toHaveLength(1);
+		expect(files[0]?.hunks[0]?.lines).toHaveLength(4);
 	});
 
 	it("parses a new file", () => {
@@ -140,10 +138,10 @@ describe("parseUnifiedPatch", () => {
 
 		const files = parseUnifiedPatch(patch);
 		expect(files).toHaveLength(1);
-		expect(files[0]!.path).toBe("new.ts");
-		expect(files[0]!.status).toBe("added");
-		expect(files[0]!.additions).toBe(2);
-		expect(files[0]!.deletions).toBe(0);
+		expect(files[0]?.path).toBe("new.ts");
+		expect(files[0]?.status).toBe("added");
+		expect(files[0]?.additions).toBe(2);
+		expect(files[0]?.deletions).toBe(0);
 	});
 
 	it("parses a deleted file", () => {
@@ -159,10 +157,10 @@ describe("parseUnifiedPatch", () => {
 
 		const files = parseUnifiedPatch(patch);
 		expect(files).toHaveLength(1);
-		expect(files[0]!.path).toBe("old.ts");
-		expect(files[0]!.status).toBe("deleted");
-		expect(files[0]!.deletions).toBe(2);
-		expect(files[0]!.additions).toBe(0);
+		expect(files[0]?.path).toBe("old.ts");
+		expect(files[0]?.status).toBe("deleted");
+		expect(files[0]?.deletions).toBe(2);
+		expect(files[0]?.additions).toBe(0);
 	});
 
 	it("parses a renamed file", () => {
@@ -174,10 +172,10 @@ describe("parseUnifiedPatch", () => {
 
 		const files = parseUnifiedPatch(patch);
 		expect(files).toHaveLength(1);
-		expect(files[0]!.path).toBe("new-name.ts");
-		expect(files[0]!.status).toBe("renamed");
-		expect(files[0]!.oldPath).toBe("old-name.ts");
-		expect(files[0]!.newPath).toBe("new-name.ts");
+		expect(files[0]?.path).toBe("new-name.ts");
+		expect(files[0]?.status).toBe("renamed");
+		expect(files[0]?.oldPath).toBe("old-name.ts");
+		expect(files[0]?.newPath).toBe("new-name.ts");
 	});
 
 	it("parses multiple files in a single patch", () => {
@@ -198,8 +196,8 @@ describe("parseUnifiedPatch", () => {
 
 		const files = parseUnifiedPatch(patch);
 		expect(files).toHaveLength(2);
-		expect(files[0]!.path).toBe("file1.ts");
-		expect(files[1]!.path).toBe("file2.ts");
+		expect(files[0]?.path).toBe("file1.ts");
+		expect(files[1]?.path).toBe("file2.ts");
 	});
 
 	it("tracks line numbers correctly", () => {
@@ -216,26 +214,26 @@ describe("parseUnifiedPatch", () => {
 		].join("\n");
 
 		const files = parseUnifiedPatch(patch);
-		const lines = files[0]!.hunks[0]!.lines;
+		const lines = files[0]?.hunks[0]?.lines ?? [];
 
-		expect(lines[0]!.type).toBe("context");
-		expect(lines[0]!.oldLine).toBe(5);
-		expect(lines[0]!.newLine).toBe(5);
+		expect(lines[0]?.type).toBe("context");
+		expect(lines[0]?.oldLine).toBe(5);
+		expect(lines[0]?.newLine).toBe(5);
 
-		expect(lines[1]!.type).toBe("deletion");
-		expect(lines[1]!.oldLine).toBe(6);
-		expect(lines[1]!.newLine).toBeNull();
+		expect(lines[1]?.type).toBe("deletion");
+		expect(lines[1]?.oldLine).toBe(6);
+		expect(lines[1]?.newLine).toBeNull();
 
-		expect(lines[2]!.type).toBe("addition");
-		expect(lines[2]!.oldLine).toBeNull();
-		expect(lines[2]!.newLine).toBe(6);
+		expect(lines[2]?.type).toBe("addition");
+		expect(lines[2]?.oldLine).toBeNull();
+		expect(lines[2]?.newLine).toBe(6);
 
-		expect(lines[3]!.type).toBe("addition");
-		expect(lines[3]!.newLine).toBe(7);
+		expect(lines[3]?.type).toBe("addition");
+		expect(lines[3]?.newLine).toBe(7);
 
-		expect(lines[4]!.type).toBe("context");
-		expect(lines[4]!.oldLine).toBe(7);
-		expect(lines[4]!.newLine).toBe(8);
+		expect(lines[4]?.type).toBe("context");
+		expect(lines[4]?.oldLine).toBe(7);
+		expect(lines[4]?.newLine).toBe(8);
 	});
 
 	it("handles multiple hunks in one file", () => {
@@ -257,9 +255,9 @@ describe("parseUnifiedPatch", () => {
 
 		const files = parseUnifiedPatch(patch);
 		expect(files).toHaveLength(1);
-		expect(files[0]!.hunks).toHaveLength(2);
-		expect(files[0]!.additions).toBe(2);
-		expect(files[0]!.deletions).toBe(2);
+		expect(files[0]?.hunks).toHaveLength(2);
+		expect(files[0]?.additions).toBe(2);
+		expect(files[0]?.deletions).toBe(2);
 	});
 
 	it("preserves hunk header", () => {
@@ -272,7 +270,7 @@ describe("parseUnifiedPatch", () => {
 		].join("\n");
 
 		const files = parseUnifiedPatch(patch);
-		expect(files[0]!.hunks[0]!.header).toBe(
+		expect(files[0]?.hunks[0]?.header).toBe(
 			"@@ -1,3 +1,3 @@ function example() {",
 		);
 	});
@@ -289,14 +287,14 @@ describe("parseUnifiedPatch", () => {
 		].join("\n");
 
 		const files = parseUnifiedPatch(patch);
-		const lines = files[0]!.hunks[0]!.lines;
+		const lines = files[0]?.hunks[0]?.lines ?? [];
 		const noNewline = lines.find(
 			(l) => l.content === "\\ No newline at end of file",
 		);
 		expect(noNewline).toBeDefined();
-		expect(noNewline!.type).toBe("context");
-		expect(noNewline!.oldLine).toBeNull();
-		expect(noNewline!.newLine).toBeNull();
+		expect(noNewline?.type).toBe("context");
+		expect(noNewline?.oldLine).toBeNull();
+		expect(noNewline?.newLine).toBeNull();
 	});
 
 	it("detects added file from null oldPath", () => {
@@ -309,8 +307,8 @@ describe("parseUnifiedPatch", () => {
 		].join("\n");
 
 		const files = parseUnifiedPatch(patch);
-		expect(files[0]!.status).toBe("added");
-		expect(files[0]!.oldPath).toBeNull();
+		expect(files[0]?.status).toBe("added");
+		expect(files[0]?.oldPath).toBeNull();
 	});
 
 	it("detects deleted file from null newPath", () => {
@@ -323,8 +321,8 @@ describe("parseUnifiedPatch", () => {
 		].join("\n");
 
 		const files = parseUnifiedPatch(patch);
-		expect(files[0]!.status).toBe("deleted");
-		expect(files[0]!.newPath).toBeNull();
+		expect(files[0]?.status).toBe("deleted");
+		expect(files[0]?.newPath).toBeNull();
 	});
 
 	it("deletion lines include anchorNewLine", () => {
@@ -338,7 +336,11 @@ describe("parseUnifiedPatch", () => {
 		].join("\n");
 
 		const files = parseUnifiedPatch(patch);
-		const deletion = files[0]!.hunks[0]!.lines[0]!;
+		const deletion = files[0]?.hunks[0]?.lines[0];
+		expect(deletion).toBeDefined();
+		if (!deletion) {
+			return;
+		}
 		expect(deletion.type).toBe("deletion");
 		expect(deletion.anchorNewLine).toBe(1);
 	});

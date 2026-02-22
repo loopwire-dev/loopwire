@@ -1,8 +1,8 @@
 import { WorkspaceView } from "../../features/ide/WorkspaceView";
+import { AppSidebar } from "../../features/sidebar/AppSidebar";
 import { NewWorkspaceView } from "../../features/workspace/NewWorkspaceView";
 import { useDaemon } from "../hooks/useDaemon";
 import { useAppStore } from "../stores/app-store";
-import { AppSidebar } from "../../features/sidebar/AppSidebar";
 
 export function AppLayout() {
 	useDaemon();

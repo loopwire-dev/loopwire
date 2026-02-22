@@ -57,7 +57,9 @@ pub struct WorkspaceAgentEntry {
 }
 
 fn workspace_persistence_path(paths: &ConfigPaths, workspace_id: Uuid) -> PathBuf {
-    paths.workspace_data_dir(workspace_id).join("workspace.json")
+    paths
+        .workspace_data_dir(workspace_id)
+        .join("workspace.json")
 }
 
 fn default_workspace_name(path: &str) -> String {
@@ -73,8 +75,7 @@ fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<(), std::io
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let json = serde_json::to_string_pretty(value)
-        .map_err(std::io::Error::other)?;
+    let json = serde_json::to_string_pretty(value).map_err(std::io::Error::other)?;
     let tmp = path.with_extension(format!("tmp.{}", Uuid::new_v4()));
     std::fs::write(&tmp, json)?;
     std::fs::rename(&tmp, path)?;

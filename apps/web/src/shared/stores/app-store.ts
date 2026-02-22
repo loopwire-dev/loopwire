@@ -81,13 +81,17 @@ function normalizeWorkspacePath(path: string): string {
 	return path === "/" ? "/" : path.replace(/\/+$/, "");
 }
 
-function normalizeWorkspaceId(workspaceId: string | null | undefined): string | null {
+function normalizeWorkspaceId(
+	workspaceId: string | null | undefined,
+): string | null {
 	if (typeof workspaceId !== "string") return null;
 	const trimmed = workspaceId.trim();
 	return trimmed || null;
 }
 
-function workspaceStoreKey(workspaceId: string | null | undefined): string | null {
+function workspaceStoreKey(
+	workspaceId: string | null | undefined,
+): string | null {
 	const normalizedId = normalizeWorkspaceId(workspaceId);
 	if (normalizedId) return `id:${normalizedId}`;
 	return null;
@@ -111,7 +115,9 @@ export function workspaceStoreKeyForSelection(
 	return workspaceStoreKey(workspaceId);
 }
 
-function normalizeWorkspaceIcon(icon: string | null | undefined): string | null {
+function normalizeWorkspaceIcon(
+	icon: string | null | undefined,
+): string | null {
 	if (typeof icon !== "string") return null;
 	const trimmed = icon.trim();
 	if (!trimmed) return null;
@@ -128,7 +134,9 @@ function mergeSessionsForWorkspaceKey(
 	sessionsByWorkspacePath: Record<string, WorkspaceSession[]>,
 	workspaceKey: string,
 ): WorkspaceSession[] {
-	return normalizeWorkspaceSessions(sessionsByWorkspacePath[workspaceKey] ?? []);
+	return normalizeWorkspaceSessions(
+		sessionsByWorkspacePath[workspaceKey] ?? [],
+	);
 }
 
 function findActiveSessionIdForWorkspaceKey(
@@ -198,7 +206,7 @@ function loadWorkspaceRoots(): WorkspaceRoot[] {
 								name: defaultWorkspaceName(entry),
 								pinned: false,
 								icon: null,
-															};
+							};
 						}
 						if (
 							entry &&
@@ -291,8 +299,18 @@ export interface AppState {
 		fromSessionId: string,
 		toSessionId: string,
 	) => void;
-	renameSessionCustomName: (sessionId: string, customName: string | null) => void;
-	updateSessionSettings: (sessionId: string, settings: { pinned?: boolean; icon?: string | null; sortOrder?: number | null }) => void;
+	renameSessionCustomName: (
+		sessionId: string,
+		customName: string | null,
+	) => void;
+	updateSessionSettings: (
+		sessionId: string,
+		settings: {
+			pinned?: boolean;
+			icon?: string | null;
+			sortOrder?: number | null;
+		},
+	) => void;
 	updateSessionActivity: (sessionId: string, activity: AgentActivity) => void;
 	removeWorkspaceSession: (sessionId: string) => void;
 	removeSessionById: (sessionId: string) => void;
@@ -315,7 +333,11 @@ export interface AppState {
 	openFilePath: string | null;
 	openFileContent: string | null;
 	openFileImageSrc: string | null;
-	setOpenFile: (path: string, content: string | null, imageSrc?: string | null) => void;
+	setOpenFile: (
+		path: string,
+		content: string | null,
+		imageSrc?: string | null,
+	) => void;
 	clearOpenFile: () => void;
 }
 
@@ -359,7 +381,6 @@ export const useAppStore = create<AppState>((set) => ({
 			openFilePath: null,
 			openFileContent: null,
 			openFileImageSrc: null,
-
 		}),
 	clearWorkspace: () =>
 		set({
@@ -368,7 +389,6 @@ export const useAppStore = create<AppState>((set) => ({
 			openFilePath: null,
 			openFileContent: null,
 			openFileImageSrc: null,
-
 		}),
 
 	workspaceRoots: loadWorkspaceRoots(),
@@ -387,7 +407,7 @@ export const useAppStore = create<AppState>((set) => ({
 					name: defaultWorkspaceName(path),
 					pinned: false,
 					icon: null,
-									},
+				},
 			]);
 			persistWorkspaceRoots(roots);
 			return { workspaceRoots: roots };
@@ -576,7 +596,9 @@ export const useAppStore = create<AppState>((set) => ({
 				sessionsByWorkspacePath,
 			)) {
 				activeSessionIdByWorkspacePath[path] =
-					groupedSessions.length === 1 ? groupedSessions[0]?.sessionId ?? null : null;
+					groupedSessions.length === 1
+						? (groupedSessions[0]?.sessionId ?? null)
+						: null;
 			}
 
 			return {
@@ -595,11 +617,10 @@ export const useAppStore = create<AppState>((set) => ({
 				state.sessionsByWorkspacePath,
 				workspaceKey,
 			);
-			const filtered = existing.filter((s) => s.sessionId !== session.sessionId);
-			const nextSessions = normalizeWorkspaceSessions([
-				...filtered,
-				session,
-			]);
+			const filtered = existing.filter(
+				(s) => s.sessionId !== session.sessionId,
+			);
+			const nextSessions = normalizeWorkspaceSessions([...filtered, session]);
 			const nextSessionsByWorkspacePath = {
 				...state.sessionsByWorkspacePath,
 			};
@@ -653,25 +674,27 @@ export const useAppStore = create<AppState>((set) => ({
 			const trimmedName = customName?.trim() ?? "";
 			let changed = false;
 			const nextSessionsByWorkspacePath = Object.fromEntries(
-				Object.entries(state.sessionsByWorkspacePath).map(([path, sessions]) => {
-					let pathChanged = false;
-					const nextSessions = sessions.map((session) => {
-						if (session.sessionId !== sessionId) return session;
-						const normalizedCustomName = trimmedName || null;
-						if ((session.customName ?? null) === normalizedCustomName) {
-							return session;
+				Object.entries(state.sessionsByWorkspacePath).map(
+					([path, sessions]) => {
+						let pathChanged = false;
+						const nextSessions = sessions.map((session) => {
+							if (session.sessionId !== sessionId) return session;
+							const normalizedCustomName = trimmedName || null;
+							if ((session.customName ?? null) === normalizedCustomName) {
+								return session;
+							}
+							pathChanged = true;
+							return {
+								...session,
+								customName: normalizedCustomName,
+							};
+						});
+						if (pathChanged) {
+							changed = true;
 						}
-						pathChanged = true;
-						return {
-							...session,
-							customName: normalizedCustomName,
-						};
-					});
-					if (pathChanged) {
-						changed = true;
-					}
-					return [path, pathChanged ? nextSessions : sessions];
-				}),
+						return [path, pathChanged ? nextSessions : sessions];
+					},
+				),
 			);
 
 			if (!changed) return state;
@@ -683,21 +706,25 @@ export const useAppStore = create<AppState>((set) => ({
 		set((state) => {
 			let changed = false;
 			const nextSessionsByWorkspacePath = Object.fromEntries(
-				Object.entries(state.sessionsByWorkspacePath).map(([path, sessions]) => {
-					let pathChanged = false;
-					const nextSessions = sessions.map((session) => {
-						if (session.sessionId !== sessionId) return session;
-						pathChanged = true;
-						changed = true;
-						return {
-							...session,
-							...("pinned" in settings ? { pinned: settings.pinned } : {}),
-							...("icon" in settings ? { icon: settings.icon } : {}),
-							...("sortOrder" in settings ? { sortOrder: settings.sortOrder } : {}),
-						};
-					});
-					return [path, pathChanged ? nextSessions : sessions];
-				}),
+				Object.entries(state.sessionsByWorkspacePath).map(
+					([path, sessions]) => {
+						let pathChanged = false;
+						const nextSessions = sessions.map((session) => {
+							if (session.sessionId !== sessionId) return session;
+							pathChanged = true;
+							changed = true;
+							return {
+								...session,
+								...("pinned" in settings ? { pinned: settings.pinned } : {}),
+								...("icon" in settings ? { icon: settings.icon } : {}),
+								...("sortOrder" in settings
+									? { sortOrder: settings.sortOrder }
+									: {}),
+							};
+						});
+						return [path, pathChanged ? nextSessions : sessions];
+					},
+				),
 			);
 			if (!changed) return state;
 
@@ -714,19 +741,21 @@ export const useAppStore = create<AppState>((set) => ({
 		set((state) => {
 			let changed = false;
 			const nextSessionsByWorkspacePath = Object.fromEntries(
-				Object.entries(state.sessionsByWorkspacePath).map(([path, sessions]) => {
-					let pathChanged = false;
-					const nextSessions = sessions.map((session) => {
-						if (session.sessionId !== sessionId) return session;
-						pathChanged = true;
-						changed = true;
-						return {
-							...session,
-							activity,
-						};
-					});
-					return [path, pathChanged ? nextSessions : sessions];
-				}),
+				Object.entries(state.sessionsByWorkspacePath).map(
+					([path, sessions]) => {
+						let pathChanged = false;
+						const nextSessions = sessions.map((session) => {
+							if (session.sessionId !== sessionId) return session;
+							pathChanged = true;
+							changed = true;
+							return {
+								...session,
+								activity,
+							};
+						});
+						return [path, pathChanged ? nextSessions : sessions];
+					},
+				),
 			);
 			if (!changed) return state;
 			return {
@@ -736,7 +765,8 @@ export const useAppStore = create<AppState>((set) => ({
 	removeWorkspaceSession: (sessionId) =>
 		set((state) => {
 			const targetKey = Object.entries(state.sessionsByWorkspacePath).find(
-				([, sessions]) => sessions.some((session) => session.sessionId === sessionId),
+				([, sessions]) =>
+					sessions.some((session) => session.sessionId === sessionId),
 			)?.[0];
 			if (!targetKey) return state;
 			const existing = mergeSessionsForWorkspaceKey(
@@ -770,7 +800,10 @@ export const useAppStore = create<AppState>((set) => ({
 			// Clear stale agent panel
 			const nextPanels = { ...state.activePanelByWorkspacePath };
 			const currentPanel = nextPanels[targetKey];
-			if (currentPanel?.kind === "agent" && currentPanel.sessionId === sessionId) {
+			if (
+				currentPanel?.kind === "agent" &&
+				currentPanel.sessionId === sessionId
+			) {
 				nextPanels[targetKey] = { kind: "panel", panel: "files" };
 			}
 
@@ -782,10 +815,12 @@ export const useAppStore = create<AppState>((set) => ({
 		}),
 	removeSessionById: (sessionId) =>
 		set((state) => {
-			let nextSessionsByWorkspacePath = { ...state.sessionsByWorkspacePath };
-			let nextActive = { ...state.activeSessionIdByWorkspacePath };
+			const nextSessionsByWorkspacePath = { ...state.sessionsByWorkspacePath };
+			const nextActive = { ...state.activeSessionIdByWorkspacePath };
 			const nextPanels = { ...state.activePanelByWorkspacePath };
-			for (const [path, sessions] of Object.entries(nextSessionsByWorkspacePath)) {
+			for (const [path, sessions] of Object.entries(
+				nextSessionsByWorkspacePath,
+			)) {
 				if (!sessions.some((s) => s.sessionId === sessionId)) continue;
 				const filtered = sessions.filter((s) => s.sessionId !== sessionId);
 				if (filtered.length === 0) {
@@ -799,7 +834,10 @@ export const useAppStore = create<AppState>((set) => ({
 				}
 				// Clear stale agent panel
 				const currentPanel = nextPanels[path];
-				if (currentPanel?.kind === "agent" && currentPanel.sessionId === sessionId) {
+				if (
+					currentPanel?.kind === "agent" &&
+					currentPanel.sessionId === sessionId
+				) {
 					nextPanels[path] = { kind: "panel", panel: "files" };
 				}
 			}
@@ -835,6 +873,11 @@ export const useAppStore = create<AppState>((set) => ({
 	openFileContent: null,
 	openFileImageSrc: null,
 	setOpenFile: (path, content, imageSrc = null) =>
-		set({ openFilePath: path, openFileContent: content, openFileImageSrc: imageSrc }),
-	clearOpenFile: () => set({ openFilePath: null, openFileContent: null, openFileImageSrc: null }),
+		set({
+			openFilePath: path,
+			openFileContent: content,
+			openFileImageSrc: imageSrc,
+		}),
+	clearOpenFile: () =>
+		set({ openFilePath: null, openFileContent: null, openFileImageSrc: null }),
 }));

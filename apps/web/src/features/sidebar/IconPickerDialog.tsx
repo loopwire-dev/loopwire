@@ -74,9 +74,7 @@ export function IconPickerDialog({
 	const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
 	const [crop, setCrop] = useState({ x: 0, y: 0 });
 	const [zoom, setZoom] = useState(1);
-	const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(
-		null,
-	);
+	const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
 	const [useThemeMask, setUseThemeMask] = useState(true);
 	const resetCropState = useCallback(() => {
 		setCropImageSrc(null);
@@ -93,7 +91,7 @@ export function IconPickerDialog({
 		setIconDraft(workspace.icon ?? "");
 		setUseThemeMask(!isThemeMaskDisabled(workspace.icon ?? null));
 		resetCropState();
-	}, [workspace?.path, workspace?.icon, resetCropState]);
+	}, [workspace, resetCropState]);
 
 	const handleOpen = (open: boolean) => {
 		if (!open) {

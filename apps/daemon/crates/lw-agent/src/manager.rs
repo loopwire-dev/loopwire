@@ -206,10 +206,7 @@ impl AgentManager {
                 created_at,
                 activity: AgentActivity::unknown("persisted_hydrate", now),
             };
-            self.handles
-                .write()
-                .await
-                .insert(agent.session_id, handle);
+            self.handles.write().await.insert(agent.session_id, handle);
             self.recorder
                 .ensure_activity_state(agent.session_id, created_at, "persisted_hydrate")
                 .await;
@@ -219,13 +216,16 @@ impl AgentManager {
     pub async fn ensure_persisted_handles(&self, persisted: &[PersistedAgentInfo]) {
         for agent in persisted {
             // Fast path: already tracked and active in memory — nothing to do.
-            let dominated = self.handles.read().await.get(&agent.session_id).is_some_and(
-                |h| {
+            let dominated = self
+                .handles
+                .read()
+                .await
+                .get(&agent.session_id)
+                .is_some_and(|h| {
                     h.status == AgentStatus::Running
                         || h.status == AgentStatus::Restored
                         || h.status == AgentStatus::Starting
-                },
-            );
+                });
             if dominated {
                 continue;
             }

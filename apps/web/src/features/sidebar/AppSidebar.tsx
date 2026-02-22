@@ -1,19 +1,25 @@
-import { MoveHorizontal, PanelLeft, PanelRight, Plus, Settings } from "lucide-react";
+import {
+	MoveHorizontal,
+	PanelLeft,
+	PanelRight,
+	Plus,
+	Settings,
+} from "lucide-react";
 import { Fragment, useEffect, useState } from "react";
 import { SettingsDialog } from "../../shared/layout/SettingsDialog";
 import { api } from "../../shared/lib/api";
 import {
-	workspaceStoreKeyForSelection,
 	useAppStore,
+	workspaceStoreKeyForSelection,
 } from "../../shared/stores/app-store";
 import { Tooltip } from "../../shared/ui/Tooltip";
 import { LoopwireLogo } from "../landing/LoopwireLogo";
 import { IconPickerDialog } from "./IconPickerDialog";
+import { WorkspaceItem } from "./WorkspaceItem";
 import {
 	SIDEBAR_TAB_HOVER_CLASS,
 	SIDEBAR_TAB_SELECTED_OVERLAY_CLASS,
 } from "./sidebar-tab-styles";
-import { WorkspaceItem } from "./WorkspaceItem";
 
 const COMPACT_SIDEBAR_INTERACTIVE_SELECTOR =
 	"button, [role='button'], a[href], input, textarea, select, summary, label[for], [role='link'], [role='menuitem'], [tabindex]:not([tabindex='-1']), [data-workspace-menu-container='true'], [data-workspace-menu='true']";
@@ -91,7 +97,9 @@ export function AppSidebar() {
 	}, [sidebarCompact]);
 
 	const activateWorkspace = (path: string) => {
-		const root = useAppStore.getState().workspaceRoots.find((r) => r.path === path);
+		const root = useAppStore
+			.getState()
+			.workspaceRoots.find((r) => r.path === path);
 		if (path !== workspacePath) {
 			if (root?.id) {
 				setWorkspace(path, root.id);
@@ -104,7 +112,7 @@ export function AppSidebar() {
 		// Sessions are already hydrated by useDaemon — read from the store
 		const workspaceKey = workspaceStoreKeyForSelection(root?.id ?? null, path);
 		const allSessions = useAppStore.getState().sessionsByWorkspacePath;
-		const existing = workspaceKey ? allSessions[workspaceKey] ?? [] : [];
+		const existing = workspaceKey ? (allSessions[workspaceKey] ?? []) : [];
 		if (existing.length === 1) {
 			attachWorkspaceSession(path, existing[0]?.sessionId ?? null, root?.id);
 		} else {
@@ -261,23 +269,23 @@ export function AppSidebar() {
 				{/* New Workspace */}
 				<div className="px-2 pt-3 pb-1 shrink-0">
 					<Tooltip content={sidebarCompact ? "New Workspace" : ""}>
-							<button
-								type="button"
-								onClick={() => setBrowsingForWorkspace(true)}
-								className={`group relative w-full flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium overflow-hidden transition-colors ${
-									browsingForWorkspace || !workspacePath
+						<button
+							type="button"
+							onClick={() => setBrowsingForWorkspace(true)}
+							className={`group relative w-full flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium overflow-hidden transition-colors ${
+								browsingForWorkspace || !workspacePath
 									? ""
 									: `bg-transparent ${SIDEBAR_TAB_HOVER_CLASS}`
 							}`}
 						>
-								<span
-									aria-hidden="true"
-									className={`${SIDEBAR_TAB_SELECTED_OVERLAY_CLASS} ${
-										browsingForWorkspace || !workspacePath
-											? "opacity-100"
-											: "opacity-0"
-									}`}
-								/>
+							<span
+								aria-hidden="true"
+								className={`${SIDEBAR_TAB_SELECTED_OVERLAY_CLASS} ${
+									browsingForWorkspace || !workspacePath
+										? "opacity-100"
+										: "opacity-0"
+								}`}
+							/>
 							<span className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center leading-none">
 								<Plus aria-hidden="true" size={14} className="shrink-0" />
 							</span>

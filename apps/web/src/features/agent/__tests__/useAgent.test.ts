@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { toWorkspaceSession, type AgentSession } from "../useAgent";
+import { describe, expect, it } from "vitest";
+import { type AgentSession, toWorkspaceSession } from "../useAgent";
 
 describe("toWorkspaceSession", () => {
 	const baseSession: AgentSession = {
@@ -79,8 +79,8 @@ describe("toWorkspaceSession", () => {
 	it("provides default activity when missing", () => {
 		const result = toWorkspaceSession(baseSession);
 		expect(result.activity).toBeDefined();
-		expect(result.activity!.phase).toBe("unknown");
-		expect(result.activity!.reason).toBe("frontend_default");
+		expect(result.activity?.phase).toBe("unknown");
+		expect(result.activity?.reason).toBe("frontend_default");
 	});
 
 	it("passes through activity when provided", () => {

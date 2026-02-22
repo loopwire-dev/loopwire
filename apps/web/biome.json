@@ -1,12 +1,17 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
-  "files": {
-    "ignore": ["dist/**", "coverage/**", "node_modules/**", "tsconfig.tsbuildinfo"]
-  },
-  "formatter": {
-    "enabled": true
-  },
-  "linter": {
-    "enabled": true
-  }
+	"$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+	"files": {
+		"ignore": [
+			"dist/**",
+			"coverage/**",
+			"node_modules/**",
+			"tsconfig.tsbuildinfo"
+		]
+	},
+	"formatter": {
+		"enabled": true
+	},
+	"linter": {
+		"enabled": true
+	}
 }

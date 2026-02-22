@@ -1,11 +1,4 @@
-import {
-	Check,
-	CheckCircle2,
-	Copy,
-	Moon,
-	Search,
-	Sun,
-} from "lucide-react";
+import { Check, CheckCircle2, Copy, Moon, Search, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useState } from "react";
 import { Button } from "../../shared/ui/Button";

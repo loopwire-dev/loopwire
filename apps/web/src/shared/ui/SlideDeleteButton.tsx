@@ -89,7 +89,8 @@ export function SlideDeleteButton({ onDelete }: SlideDeleteButtonProps) {
 								event.currentTarget.setPointerCapture(event.pointerId);
 							}}
 							onPointerMove={(event) => {
-								if (!dragging || pointerIdRef.current !== event.pointerId) return;
+								if (!dragging || pointerIdRef.current !== event.pointerId)
+									return;
 								event.stopPropagation();
 								const delta = event.clientX - dragStartXRef.current;
 								const next = Math.min(
@@ -104,22 +105,22 @@ export function SlideDeleteButton({ onDelete }: SlideDeleteButtonProps) {
 								pointerIdRef.current = null;
 								finishDrag();
 							}}
-								onPointerCancel={(event) => {
-									if (pointerIdRef.current !== event.pointerId) return;
-									event.stopPropagation();
-									pointerIdRef.current = null;
-									setDragging(false);
-									setDragValue(0);
-								}}
-								className={`absolute inset-y-1 left-1 inline-flex items-center justify-center rounded-md bg-white dark:bg-zinc-800 text-red-600 shadow-sm touch-none select-none ${
-									dragging ? "cursor-grabbing" : "cursor-grab"
-								}`}
-								aria-label="Slide to delete"
-								style={{
-									transform: `translateX(${dragOffset}px)`,
-									width: KNOB_WIDTH,
-								}}
-							>
+							onPointerCancel={(event) => {
+								if (pointerIdRef.current !== event.pointerId) return;
+								event.stopPropagation();
+								pointerIdRef.current = null;
+								setDragging(false);
+								setDragValue(0);
+							}}
+							className={`absolute inset-y-1 left-1 inline-flex items-center justify-center rounded-md bg-white dark:bg-zinc-800 text-red-600 shadow-sm touch-none select-none ${
+								dragging ? "cursor-grabbing" : "cursor-grab"
+							}`}
+							aria-label="Slide to delete"
+							style={{
+								transform: `translateX(${dragOffset}px)`,
+								width: KNOB_WIDTH,
+							}}
+						>
 							<Trash2 aria-hidden="true" size={13} />
 						</button>
 					</div>
