@@ -127,8 +127,7 @@ fn collect_untracked_patches(cwd: &Path) -> Result<String, ApiErrorResponse> {
     let max_workers = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(4)
-        .min(8)
-        .max(1);
+        .clamp(1, 8);
     let worker_count = max_workers.min(untracked_paths.len());
 
     if worker_count <= 1 {

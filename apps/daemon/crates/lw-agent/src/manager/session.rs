@@ -144,8 +144,7 @@ impl AgentManager {
                 &args_refs,
                 &workspace_path,
                 env,
-                120,
-                40,
+                (120, 40),
             )
             .await?;
 
@@ -236,8 +235,7 @@ impl AgentManager {
                     &args_refs,
                     &workspace_path,
                     env,
-                    120,
-                    40,
+                    (120, 40),
                 )
                 .await
         }
@@ -276,8 +274,7 @@ impl AgentManager {
                         &args_refs,
                         &workspace_path,
                         env,
-                        120,
-                        40,
+                        (120, 40),
                     )
                     .await?;
                 (
@@ -474,8 +471,7 @@ impl AgentManager {
                 &args_refs,
                 &handle.workspace_path,
                 env,
-                120,
-                40,
+                (120, 40),
             )
             .await?;
 

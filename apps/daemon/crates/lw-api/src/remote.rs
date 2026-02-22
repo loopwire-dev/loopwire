@@ -116,9 +116,9 @@ impl RemoteAccessManager {
         token_store: std::sync::Arc<TokenStore>,
         paths: ConfigPaths,
     ) -> Result<Self, RemoteError> {
-        paths.ensure_config_dir().map_err(anyhow::Error::from)?;
-        let host_id = load_or_create_host_id(&paths).map_err(anyhow::Error::from)?;
-        let trusted_device_key = load_or_create_trust_key(&paths).map_err(anyhow::Error::from)?;
+        paths.ensure_config_dir()?;
+        let host_id = load_or_create_host_id(&paths)?;
+        let trusted_device_key = load_or_create_trust_key(&paths)?;
 
         Ok(Self {
             config,
@@ -564,7 +564,7 @@ fn obfuscate_backend_target(backend_url: &str, invite_token: &str) -> String {
 }
 
 fn parse_hex_or_bytes(input: &str) -> Vec<u8> {
-    if input.len() % 2 == 0 && input.chars().all(|c| c.is_ascii_hexdigit()) {
+    if input.len().is_multiple_of(2) && input.chars().all(|c| c.is_ascii_hexdigit()) {
         hex::decode(input).unwrap_or_else(|_| input.as_bytes().to_vec())
     } else {
         input.as_bytes().to_vec()

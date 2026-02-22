@@ -24,9 +24,9 @@ impl PtyManager {
         args: &[&str],
         working_dir: &Path,
         env: Vec<(String, String)>,
-        cols: u16,
-        rows: u16,
+        size: (u16, u16),
     ) -> Result<Arc<PtySession>, PtyError> {
+        let (cols, rows) = size;
         let session = PtySession::spawn(session_id, program, args, working_dir, env, cols, rows)?;
         let id = session.id;
         let session = Arc::new(session);

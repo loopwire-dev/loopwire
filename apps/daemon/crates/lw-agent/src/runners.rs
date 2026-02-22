@@ -70,7 +70,7 @@ pub fn is_command_available(binary: &str) -> bool {
 
 fn extract_version(s: &str) -> String {
     s.split_whitespace()
-        .find(|w| w.chars().next().map_or(false, |c| c.is_ascii_digit()))
+        .find(|w| w.chars().next().is_some_and(|c| c.is_ascii_digit()))
         .unwrap_or(s)
         .to_string()
 }

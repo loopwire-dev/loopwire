@@ -245,7 +245,7 @@ impl SessionActivityState {
 }
 
 fn chrono_from_std(duration: Duration) -> chrono::Duration {
-    chrono::Duration::from_std(duration).unwrap_or_else(|_| chrono::Duration::MAX)
+    chrono::Duration::from_std(duration).unwrap_or(chrono::Duration::MAX)
 }
 
 // ---------------------------------------------------------------------------

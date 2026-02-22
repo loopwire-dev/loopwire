@@ -495,7 +495,7 @@ pub async fn session_scrollback(
         .await
         .map_err(|e| ApiErrorResponse {
             status: StatusCode::NOT_FOUND,
-            error: ApiError::new("SCROLLBACK_UNAVAILABLE", &e.to_string()),
+            error: ApiError::new("SCROLLBACK_UNAVAILABLE", e.to_string()),
         })?;
 
     Ok(Json(ScrollbackResponse {

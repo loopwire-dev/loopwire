@@ -132,12 +132,7 @@ impl WorkspaceRegistry {
             Ok(resolved)
         })
         .await
-        .map_err(|_| {
-            FsError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "resolve task panicked",
-            ))
-        })??;
+        .map_err(|_| FsError::Io(std::io::Error::other("resolve task panicked")))??;
 
         Ok(canonical)
     }

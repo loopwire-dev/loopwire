@@ -117,8 +117,7 @@ pub(crate) fn extract_https_urls(line: &str) -> Vec<String> {
         let end = candidate
             .find(|c: char| c.is_whitespace() || matches!(c, '"' | '\'' | '<' | '>'))
             .unwrap_or(candidate.len());
-        let cleaned =
-            candidate[..end].trim_end_matches(|c| matches!(c, ',' | ';' | ')' | ']' | '}'));
+        let cleaned = candidate[..end].trim_end_matches([',', ';', ')', ']', '}']);
 
         if cleaned.starts_with("https://") {
             urls.push(cleaned.to_string());

@@ -74,7 +74,7 @@ fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<(), std::io
         std::fs::create_dir_all(parent)?;
     }
     let json = serde_json::to_string_pretty(value)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        .map_err(std::io::Error::other)?;
     let tmp = path.with_extension(format!("tmp.{}", Uuid::new_v4()));
     std::fs::write(&tmp, json)?;
     std::fs::rename(&tmp, path)?;

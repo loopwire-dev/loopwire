@@ -14,7 +14,7 @@ async fn manager_create_get_kill() {
     let id = Uuid::new_v4();
 
     let session = mgr
-        .create(id, "sleep", &["60"], &tmp_dir(), vec![], 80, 24)
+        .create(id, "sleep", &["60"], &tmp_dir(), vec![], (80, 24))
         .await
         .unwrap();
     assert_eq!(session.id, id);
@@ -41,7 +41,7 @@ async fn manager_reap_stopped() {
     let id = Uuid::new_v4();
 
     // Spawn a short-lived process
-    mgr.create(id, "echo", &["done"], &tmp_dir(), vec![], 80, 24)
+    mgr.create(id, "echo", &["done"], &tmp_dir(), vec![], (80, 24))
         .await
         .unwrap();
 
@@ -65,11 +65,11 @@ async fn manager_kill_all() {
     let id2 = Uuid::new_v4();
 
     let s1 = mgr
-        .create(id1, "sleep", &["60"], &tmp_dir(), vec![], 80, 24)
+        .create(id1, "sleep", &["60"], &tmp_dir(), vec![], (80, 24))
         .await
         .unwrap();
     let s2 = mgr
-        .create(id2, "sleep", &["60"], &tmp_dir(), vec![], 80, 24)
+        .create(id2, "sleep", &["60"], &tmp_dir(), vec![], (80, 24))
         .await
         .unwrap();
 
@@ -92,10 +92,10 @@ async fn manager_list() {
     let id1 = Uuid::new_v4();
     let id2 = Uuid::new_v4();
 
-    mgr.create(id1, "sleep", &["60"], &tmp_dir(), vec![], 80, 24)
+    mgr.create(id1, "sleep", &["60"], &tmp_dir(), vec![], (80, 24))
         .await
         .unwrap();
-    mgr.create(id2, "echo", &["hi"], &tmp_dir(), vec![], 80, 24)
+    mgr.create(id2, "echo", &["hi"], &tmp_dir(), vec![], (80, 24))
         .await
         .unwrap();
 

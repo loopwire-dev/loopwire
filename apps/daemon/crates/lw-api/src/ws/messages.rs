@@ -186,10 +186,7 @@ fn base64_encode(data: &[u8]) -> String {
 }
 
 fn usize_to_u64(value: usize) -> u64 {
-    match u64::try_from(value) {
-        Ok(v) => v,
-        Err(_) => u64::MAX,
-    }
+    u64::try_from(value).unwrap_or(u64::MAX)
 }
 
 #[cfg(test)]
