@@ -134,6 +134,10 @@ jobs:
     needs: [coverage-daemon, coverage-web]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - uses: actions/download-artifact@v4
         with:
           path: coverage-artifacts
@@ -142,6 +146,7 @@ jobs:
         uses: qltysh/qlty-action/coverage@v2
         with:
           oidc: true
+          validate: false
           files: |
             coverage-artifacts/backend-coverage/lcov.info
             coverage-artifacts/frontend-coverage/lcov.info
