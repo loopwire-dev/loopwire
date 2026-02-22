@@ -232,12 +232,24 @@ jobs:
 
       - run: moon run web:build
 
+      - name: Validate Cloudflare Pages project variable
+        shell: bash
+        env:
+          CLOUDFLARE_PAGES_PROJECT_NAME: ${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${CLOUDFLARE_PAGES_PROJECT_NAME}" ]]; then
+            echo "Missing repo variable CLOUDFLARE_PAGES_PROJECT_NAME."
+            echo "Set it to your existing Cloudflare Pages project name."
+            exit 1
+          fi
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/pages-action@v1
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: loopwire
+          projectName: ${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME }}
           directory: apps/web/dist
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
 
