@@ -21,8 +21,5 @@ target/
 # Moonrepo
 .moon/cache/
 
-# Loopwire daemon
-.loopwire/
-
 # Logs
 *.log

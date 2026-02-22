@@ -1,7 +1,7 @@
 use crate::activity::{
     ActivityTiming, AgentActivity, AgentActivityEvent, AgentActivityPhase, SessionActivityState,
 };
-use crate::manager::session::{cleanup_session_attachments, AgentHandle};
+use crate::manager::session::AgentHandle;
 use crate::prompt::has_prompt_hint;
 use lw_pty::PtySession;
 use std::collections::HashMap;
@@ -188,7 +188,6 @@ impl ActivityRecorder {
                                 {
                                     let mut w = handles.write().await;
                                     if let Some(handle) = w.get_mut(&session_id) {
-                                        cleanup_session_attachments(&handle.workspace_path, &session_id).await;
                                         // If the session was still Restored when
                                         // the process exited, the resume attempt
                                         // failed.  Mark as unresumable so the

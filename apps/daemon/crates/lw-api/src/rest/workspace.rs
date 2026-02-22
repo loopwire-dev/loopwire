@@ -28,21 +28,13 @@ pub struct WorkspaceEntry {
 }
 
 #[derive(Serialize, Deserialize)]
-struct WorkspaceIndexEntry {
-    #[serde(default = "default_workspace_id")]
-    id: Uuid,
-    path: String,
-}
-
-#[derive(Serialize, Deserialize)]
 struct WorkspacePersistence {
     #[serde(default = "default_workspace_id")]
     id: Uuid,
+    path: String,
     name: String,
     pinned: bool,
     icon: Option<String>,
-    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
-    agent_sort_orders: HashMap<String, i32>,
     #[serde(default)]
     agents: HashMap<String, WorkspaceAgentEntry>,
 }
@@ -64,14 +56,8 @@ pub struct WorkspaceAgentEntry {
     pub pid: Option<u32>,
 }
 
-fn workspaces_path(paths: &ConfigPaths) -> PathBuf {
-    paths.config_dir().join("workspaces.json")
-}
-
-fn workspace_persistence_path(workspace_path: &str) -> PathBuf {
-    PathBuf::from(workspace_path)
-        .join(".loopwire")
-        .join("workspace.json")
+fn workspace_persistence_path(paths: &ConfigPaths, workspace_id: Uuid) -> PathBuf {
+    paths.workspace_data_dir(workspace_id).join("workspace.json")
 }
 
 fn default_workspace_name(path: &str) -> String {
@@ -95,71 +81,38 @@ fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<(), std::io
     Ok(())
 }
 
-fn load_workspace_persistence(path: &str) -> Option<WorkspacePersistence> {
-    let persistence_path = workspace_persistence_path(path);
-    let content = std::fs::read_to_string(&persistence_path).ok()?;
+fn load_single_workspace_persistence(path: &Path) -> Option<WorkspacePersistence> {
+    let content = std::fs::read_to_string(path).ok()?;
     serde_json::from_str(&content).ok()
 }
 
-fn merge_legacy_sort_orders_into_agents(
-    mut agents: HashMap<String, WorkspaceAgentEntry>,
-    legacy_sort_orders: HashMap<String, i32>,
-) -> HashMap<String, WorkspaceAgentEntry> {
-    for (session_id, sort_order) in legacy_sort_orders {
-        let entry = agents.entry(session_id).or_default();
-        if entry.sort_order.is_none() {
-            entry.sort_order = Some(sort_order);
-        }
-    }
-    agents
-}
-
 pub fn load_workspaces(paths: &ConfigPaths) -> Vec<WorkspaceEntry> {
-    let path = workspaces_path(paths);
-    let content = match std::fs::read_to_string(&path) {
-        Ok(content) => content,
+    let dir = paths.workspaces_data_dir();
+    if !dir.is_dir() {
+        return Vec::new();
+    }
+    let read_dir = match std::fs::read_dir(&dir) {
+        Ok(rd) => rd,
         Err(_) => return Vec::new(),
     };
-
-    // Backward compatibility with legacy global workspaces.json format.
-    if let Ok(legacy_entries) = serde_json::from_str::<Vec<WorkspaceEntry>>(&content) {
-        return legacy_entries;
-    }
-
-    let index_entries =
-        serde_json::from_str::<Vec<WorkspaceIndexEntry>>(&content).unwrap_or_default();
     let mut seen_paths = HashSet::new();
-    let mut entries = Vec::with_capacity(index_entries.len());
-
-    for index in index_entries {
-        if !seen_paths.insert(index.path.clone()) {
+    let mut entries = Vec::new();
+    for item in read_dir.flatten() {
+        let workspace_json = item.path().join("workspace.json");
+        let Some(persistence) = load_single_workspace_persistence(&workspace_json) else {
+            continue;
+        };
+        if !seen_paths.insert(persistence.path.clone()) {
             continue;
         }
-
-        if let Some(persistence) = load_workspace_persistence(&index.path) {
-            entries.push(WorkspaceEntry {
-                id: if persistence.id.is_nil() {
-                    index.id
-                } else {
-                    persistence.id
-                },
-                path: index.path,
-                name: persistence.name,
-                pinned: persistence.pinned,
-                icon: persistence.icon,
-            });
-            continue;
-        }
-
         entries.push(WorkspaceEntry {
-            id: index.id,
-            path: index.path.clone(),
-            name: default_workspace_name(&index.path),
-            pinned: false,
-            icon: None,
+            id: persistence.id,
+            path: persistence.path,
+            name: persistence.name,
+            pinned: persistence.pinned,
+            icon: persistence.icon,
         });
     }
-
     entries
 }
 
@@ -168,75 +121,59 @@ pub fn save_workspaces(
     entries: &[WorkspaceEntry],
 ) -> Result<(), std::io::Error> {
     let mut seen_paths = HashSet::new();
-    let mut normalized = Vec::new();
     for entry in entries {
         if !seen_paths.insert(entry.path.clone()) {
             continue;
         }
-        normalized.push(entry.clone());
-    }
-
-    for entry in &normalized {
-        let persistence_path = workspace_persistence_path(&entry.path);
-        let (existing_agent_sort_orders, existing_agents) =
-            if let Some(persistence) = load_workspace_persistence(&entry.path) {
-                (persistence.agent_sort_orders, persistence.agents)
-            } else {
-                (HashMap::new(), HashMap::new())
-            };
-        let merged_agents =
-            merge_legacy_sort_orders_into_agents(existing_agents, existing_agent_sort_orders);
+        let path = workspace_persistence_path(paths, entry.id);
+        let existing_agents = load_single_workspace_persistence(&path)
+            .map(|p| p.agents)
+            .unwrap_or_default();
         let persistence = WorkspacePersistence {
             id: entry.id,
+            path: entry.path.clone(),
             name: entry.name.clone(),
             pinned: entry.pinned,
             icon: entry.icon.clone(),
-            // Keep reading this field for compatibility, but do not write it anymore.
-            agent_sort_orders: HashMap::new(),
-            agents: merged_agents,
+            agents: existing_agents,
         };
-        write_json_atomic(&persistence_path, &persistence)?;
+        write_json_atomic(&path, &persistence)?;
     }
-
-    let index: Vec<WorkspaceIndexEntry> = normalized
-        .iter()
-        .map(|entry| WorkspaceIndexEntry {
-            id: entry.id,
-            path: entry.path.clone(),
-        })
-        .collect();
-    write_json_atomic(&workspaces_path(paths), &index)?;
     Ok(())
 }
 
-pub fn load_workspace_agents(workspace_path: &Path) -> HashMap<Uuid, WorkspaceAgentEntry> {
-    let workspace_path = workspace_path.to_string_lossy();
-    let Some(persistence) = load_workspace_persistence(&workspace_path) else {
+pub fn load_workspace_agents(
+    paths: &ConfigPaths,
+    workspace_path: &Path,
+) -> HashMap<Uuid, WorkspaceAgentEntry> {
+    let workspace_path_str = workspace_path.to_string_lossy();
+    let dir = paths.workspaces_data_dir();
+    if !dir.is_dir() {
         return HashMap::new();
+    }
+    let read_dir = match std::fs::read_dir(&dir) {
+        Ok(rd) => rd,
+        Err(_) => return HashMap::new(),
     };
-
-    let mut agents: HashMap<Uuid, WorkspaceAgentEntry> = persistence
-        .agents
-        .into_iter()
-        .filter_map(|(session_id, entry)| {
-            Uuid::parse_str(&session_id)
-                .ok()
-                .map(|parsed| (parsed, entry))
-        })
-        .collect();
-
-    // Backward compatibility: old format with only sort orders.
-    for (session_id, sort_order) in persistence.agent_sort_orders {
-        let Ok(parsed_id) = Uuid::parse_str(&session_id) else {
+    for item in read_dir.flatten() {
+        let workspace_json = item.path().join("workspace.json");
+        let Some(persistence) = load_single_workspace_persistence(&workspace_json) else {
             continue;
         };
-        let entry = agents.entry(parsed_id).or_default();
-        if entry.sort_order.is_none() {
-            entry.sort_order = Some(sort_order);
+        if persistence.path != workspace_path_str.as_ref() {
+            continue;
         }
+        return persistence
+            .agents
+            .into_iter()
+            .filter_map(|(session_id, entry)| {
+                Uuid::parse_str(&session_id)
+                    .ok()
+                    .map(|parsed| (parsed, entry))
+            })
+            .collect();
     }
-
-    agents
+    HashMap::new()
 }
 
 pub fn save_workspace_agents(
@@ -248,52 +185,48 @@ pub fn save_workspace_agents(
     let existing_entry = load_workspaces(paths)
         .into_iter()
         .find(|entry| entry.path == workspace_path_str);
-    let existing_persistence = load_workspace_persistence(&workspace_path_str);
+
+    let (workspace_id, persistence_path) = if let Some(ref entry) = existing_entry {
+        (entry.id, workspace_persistence_path(paths, entry.id))
+    } else {
+        let id = Uuid::new_v4();
+        (id, workspace_persistence_path(paths, id))
+    };
+
+    let existing_persistence = load_single_workspace_persistence(&persistence_path);
     let persisted_agents: HashMap<String, WorkspaceAgentEntry> = agents
         .iter()
         .map(|(session_id, entry)| (session_id.to_string(), entry.clone()))
         .collect();
+
     let persistence = WorkspacePersistence {
-        id: existing_entry
-            .as_ref()
-            .map(|entry| entry.id)
-            .or_else(|| existing_persistence.as_ref().map(|entry| entry.id))
-            .unwrap_or_else(Uuid::new_v4),
+        id: workspace_id,
+        path: workspace_path_str.clone(),
         name: existing_entry
             .as_ref()
-            .map(|entry| entry.name.clone())
-            .or_else(|| {
-                existing_persistence
-                    .as_ref()
-                    .map(|entry| entry.name.clone())
-            })
+            .map(|e| e.name.clone())
+            .or_else(|| existing_persistence.as_ref().map(|p| p.name.clone()))
             .unwrap_or_else(|| default_workspace_name(&workspace_path_str)),
         pinned: existing_entry
             .as_ref()
-            .map(|entry| entry.pinned)
-            .or_else(|| existing_persistence.as_ref().map(|entry| entry.pinned))
+            .map(|e| e.pinned)
+            .or_else(|| existing_persistence.as_ref().map(|p| p.pinned))
             .unwrap_or(false),
         icon: existing_entry
             .as_ref()
-            .and_then(|entry| entry.icon.clone())
-            .or_else(|| {
-                existing_persistence
-                    .as_ref()
-                    .and_then(|entry| entry.icon.clone())
-            }),
-        // Keep reading this field for compatibility, but do not write it anymore.
-        agent_sort_orders: HashMap::new(),
+            .and_then(|e| e.icon.clone())
+            .or_else(|| existing_persistence.as_ref().and_then(|p| p.icon.clone())),
         agents: persisted_agents,
     };
 
-    write_json_atomic(
-        &workspace_persistence_path(&workspace_path_str),
-        &persistence,
-    )
+    write_json_atomic(&persistence_path, &persistence)
 }
 
-pub fn load_workspace_agent_sort_orders(workspace_path: &Path) -> HashMap<Uuid, i32> {
-    load_workspace_agents(workspace_path)
+pub fn load_workspace_agent_sort_orders(
+    paths: &ConfigPaths,
+    workspace_path: &Path,
+) -> HashMap<Uuid, i32> {
+    load_workspace_agents(paths, workspace_path)
         .into_iter()
         .filter_map(|(session_id, entry)| {
             entry.sort_order.map(|sort_order| (session_id, sort_order))
@@ -306,7 +239,7 @@ pub fn save_workspace_agent_sort_orders(
     workspace_path: &Path,
     sort_orders: &HashMap<Uuid, i32>,
 ) -> Result<(), std::io::Error> {
-    let mut persisted_agents = load_workspace_agents(workspace_path);
+    let mut persisted_agents = load_workspace_agents(paths, workspace_path);
     for entry in persisted_agents.values_mut() {
         entry.sort_order = None;
     }
@@ -603,21 +536,18 @@ pub async fn remove_workspace(
     State(state): State<AppState>,
     Json(body): Json<RemoveWorkspaceRequest>,
 ) -> Result<StatusCode, ApiErrorResponse> {
-    let mut entries = load_workspaces(&state.paths);
-    let before = entries.len();
-    entries.retain(|e| e.path != body.path);
-    if entries.len() == before {
+    let entries = load_workspaces(&state.paths);
+    let workspace_id = entries.iter().find(|e| e.path == body.path).map(|e| e.id);
+
+    if workspace_id.is_none() {
         return Ok(StatusCode::NO_CONTENT);
     }
-    save_workspaces(&state.paths, &entries).map_err(|e| ApiErrorResponse {
-        status: StatusCode::INTERNAL_SERVER_ERROR,
-        error: ApiError::internal(e.to_string()),
-    })?;
 
-    let persistence_path = workspace_persistence_path(&body.path);
-    if persistence_path.exists() {
-        let _ = std::fs::remove_file(&persistence_path);
+    if let Some(id) = workspace_id {
+        let data_dir = state.paths.workspace_data_dir(id);
+        let _ = std::fs::remove_dir_all(&data_dir);
     }
+
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -662,11 +592,10 @@ mod tests {
 
     #[test]
     fn workspace_entry_serde_missing_id_gets_default() {
-        // Backward compat: old workspaces.json entries without "id"
+        // Backward compat: old entries without "id"
         let json = r#"{"path":"/tmp/test","name":"test","pinned":false,"icon":null}"#;
         let parsed: WorkspaceEntry = serde_json::from_str(json).unwrap();
         assert_eq!(parsed.path, "/tmp/test");
-        // id should be a valid UUID (from serde default)
         assert!(!parsed.id.is_nil());
     }
 
@@ -678,7 +607,7 @@ mod tests {
         std::fs::create_dir_all(&workspace).unwrap();
         std::fs::create_dir_all(&config).unwrap();
 
-        let paths = ConfigPaths::with_base(config);
+        let paths = ConfigPaths::with_base(config.clone());
         let entry = WorkspaceEntry {
             id: Uuid::new_v4(),
             path: workspace.to_string_lossy().to_string(),
@@ -689,7 +618,10 @@ mod tests {
 
         save_workspaces(&paths, &[entry.clone()]).unwrap();
 
-        let persisted = workspace.join(".loopwire").join("workspace.json");
+        let persisted = config
+            .join("workspaces")
+            .join(entry.id.to_string())
+            .join("workspace.json");
         assert!(persisted.exists());
 
         let loaded = load_workspaces(&paths);
@@ -710,7 +642,7 @@ mod tests {
         std::fs::create_dir_all(&workspace).unwrap();
         std::fs::create_dir_all(&config).unwrap();
 
-        let paths = ConfigPaths::with_base(config);
+        let paths = ConfigPaths::with_base(config.clone());
         let workspace_path = workspace.to_string_lossy().to_string();
         let entry = WorkspaceEntry {
             id: Uuid::new_v4(),
@@ -757,7 +689,7 @@ mod tests {
         ]);
         save_workspace_agents(&paths, workspace.as_path(), &agents).unwrap();
 
-        let loaded_agents = load_workspace_agents(workspace.as_path());
+        let loaded_agents = load_workspace_agents(&paths, workspace.as_path());
         assert_eq!(
             loaded_agents.get(&a).map(|entry| entry.agent_type.as_str()),
             Some("codex")
@@ -789,8 +721,8 @@ mod tests {
         );
 
         // Saving workspace metadata should preserve workspace-local agent data.
-        save_workspaces(&paths, &[entry]).unwrap();
-        let loaded_after_workspace_save = load_workspace_agents(workspace.as_path());
+        save_workspaces(&paths, &[entry.clone()]).unwrap();
+        let loaded_after_workspace_save = load_workspace_agents(&paths, workspace.as_path());
         assert_eq!(
             loaded_after_workspace_save
                 .get(&a)
@@ -803,7 +735,10 @@ mod tests {
                 .and_then(|agent| agent.sort_order),
             Some(1),
         );
-        let persisted = workspace.join(".loopwire").join("workspace.json");
+        let persisted = config
+            .join("workspaces")
+            .join(entry.id.to_string())
+            .join("workspace.json");
         let persisted_content = std::fs::read_to_string(persisted).unwrap();
         assert!(!persisted_content.contains("\"agent_sort_orders\""));
 

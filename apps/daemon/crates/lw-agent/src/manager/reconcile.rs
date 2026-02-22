@@ -4,7 +4,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use uuid::Uuid;
 
-use super::session::{cleanup_session_attachments, AgentStatus};
+use super::session::AgentStatus;
 use super::AgentManager;
 
 impl AgentManager {
@@ -82,11 +82,10 @@ impl AgentManager {
                 .ensure_activity_state(session_id, now, "session_running")
                 .await;
         }
-        for (session_id, workspace_path) in &stopped_sessions {
+        for (session_id, _workspace_path) in &stopped_sessions {
             self.recorder
                 .record_stopped(*session_id, "session_not_running")
                 .await;
-            cleanup_session_attachments(workspace_path, session_id).await;
         }
         for (session_id, session) in sessions_to_monitor {
             self.recorder

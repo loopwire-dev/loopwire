@@ -38,7 +38,7 @@ impl AppState {
         let mut persisted_agents = Vec::new();
         for ws in &ws_entries {
             let ws_path = PathBuf::from(&ws.path);
-            let agents = load_workspace_agents(&ws_path);
+            let agents = load_workspace_agents(&paths, &ws_path);
             for (session_id, entry) in agents {
                 let agent_type = entry
                     .agent_type

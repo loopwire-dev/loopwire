@@ -110,7 +110,7 @@ async fn persist_workspace_agents_snapshot(
     skip_sort_fallback_for: Option<Uuid>,
 ) -> Result<(), ApiErrorResponse> {
     let sessions = running_sessions_for_workspace(state, workspace_path).await;
-    let persisted = load_workspace_agents(workspace_path);
+    let persisted = load_workspace_agents(&state.paths, workspace_path);
     let agents: HashMap<Uuid, WorkspaceAgentEntry> = sessions
         .into_iter()
         .map(|session| {
@@ -324,6 +324,14 @@ pub async fn stop_session(
             error: ApiError::internal(e.to_string()),
         })?;
     if let Some(workspace_path) = &workspace_path {
+        if let Some(workspace_id) = state.workspace_registry.find_by_path(workspace_path).await {
+            let dir = state
+                .paths
+                .workspace_data_dir(workspace_id)
+                .join("attachments")
+                .join(id.to_string());
+            let _ = tokio::fs::remove_dir_all(dir).await;
+        }
         persist_workspace_agents_snapshot(&state, workspace_path, None).await?;
     }
     Ok(StatusCode::NO_CONTENT)
@@ -428,9 +436,14 @@ pub async fn attach_to_session(
         .and_then(|e| e.to_str())
         .unwrap_or("png");
 
-    let attachments_dir = handle
-        .workspace_path
-        .join(".loopwire")
+    let workspace_id = state
+        .workspace_registry
+        .find_by_path(&handle.workspace_path)
+        .await
+        .unwrap_or_else(Uuid::new_v4);
+    let attachments_dir = state
+        .paths
+        .workspace_data_dir(workspace_id)
         .join("attachments")
         .join(id.to_string());
     tokio::fs::create_dir_all(&attachments_dir)

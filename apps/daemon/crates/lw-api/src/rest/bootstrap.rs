@@ -84,7 +84,7 @@ pub async fn bootstrap(State(state): State<AppState>) -> Json<BootstrapResponse>
     let mut all_persisted = Vec::new();
     for workspace in &workspaces {
         let workspace_path = PathBuf::from(&workspace.path);
-        let agents = load_workspace_agents(&workspace_path);
+        let agents = load_workspace_agents(&state.paths, &workspace_path);
         for (session_id, entry) in agents {
             if entry.agent_type.is_empty() {
                 continue;
@@ -139,7 +139,7 @@ pub async fn bootstrap(State(state): State<AppState>) -> Json<BootstrapResponse>
         let path = session.workspace_path.clone();
         let agents = workspace_agents
             .entry(path.clone())
-            .or_insert_with(|| load_workspace_agents(&path));
+            .or_insert_with(|| load_workspace_agents(&state.paths, &path));
         if let Some(agent) = agents.get(&session.session_id) {
             // Legacy fallback entries contain only sort_order.
             if !agent.agent_type.is_empty() {

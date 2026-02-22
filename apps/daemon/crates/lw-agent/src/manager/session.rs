@@ -2,28 +2,11 @@ use crate::activity::AgentActivity;
 use crate::runners::AgentType;
 use lw_pty::PtySession;
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use uuid::Uuid;
 
 use super::AgentManager;
-
-pub(crate) async fn cleanup_session_attachments(workspace_path: &Path, session_id: &Uuid) {
-    let dir = workspace_path
-        .join(".loopwire")
-        .join("attachments")
-        .join(session_id.to_string());
-    if dir.exists() {
-        if let Err(e) = tokio::fs::remove_dir_all(&dir).await {
-            tracing::warn!(
-                session_id = %session_id,
-                path = %dir.display(),
-                "Failed to clean up session attachments: {}",
-                e
-            );
-        }
-    }
-}
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -366,10 +349,6 @@ impl AgentManager {
         self.recorder
             .record_stopped(*session_id, "session_stopped")
             .await;
-
-        if let Some(handle) = &handle {
-            cleanup_session_attachments(&handle.workspace_path, session_id).await;
-        }
 
         Ok(())
     }

@@ -57,6 +57,16 @@ impl ConfigPaths {
         self.base.join("bin")
     }
 
+    /// Returns the base dir for all workspace data: `~/.loopwire/workspaces/`
+    pub fn workspaces_data_dir(&self) -> PathBuf {
+        self.base.join("workspaces")
+    }
+
+    /// Returns the data dir for a specific workspace: `~/.loopwire/workspaces/{id}/`
+    pub fn workspace_data_dir(&self, workspace_id: uuid::Uuid) -> PathBuf {
+        self.workspaces_data_dir().join(workspace_id.to_string())
+    }
+
     /// Ensure the config directory exists, creating it if necessary.
     pub fn ensure_config_dir(&self) -> anyhow::Result<PathBuf> {
         if !self.base.exists() {
@@ -88,6 +98,13 @@ mod tests {
         assert_eq!(paths.host_id_path(), base.join("host_id"));
         assert_eq!(paths.trust_key_path(), base.join("remote_trust_key"));
         assert_eq!(paths.bin_dir(), base.join("bin"));
+
+        assert_eq!(paths.workspaces_data_dir(), base.join("workspaces"));
+        let ws_id = uuid::Uuid::nil();
+        assert_eq!(
+            paths.workspace_data_dir(ws_id),
+            base.join("workspaces").join(ws_id.to_string())
+        );
     }
 
     #[test]
