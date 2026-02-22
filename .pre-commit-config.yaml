@@ -1,0 +1,118 @@
+minimum_pre_commit_version: "3.0.0"
+default_stages: [pre-commit]
+default_install_hook_types: [pre-commit, pre-push]
+exclude: ^(apps/web/(coverage|dist|node_modules)/|apps/daemon/target/|apps/web/tsconfig\.tsbuildinfo$)
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+
+  - repo: local
+    hooks:
+      - id: daemon-check
+        name: daemon check
+        entry: bash -lc 'moon run daemon:check'
+        language: system
+        pass_filenames: false
+        files: ^apps/daemon/
+
+      - id: daemon-complexity
+        name: daemon complexity
+        entry: bash -lc 'moon run daemon:complexity'
+        language: system
+        pass_filenames: false
+        files: ^apps/daemon/
+
+      - id: daemon-docs
+        name: daemon docs check
+        entry: bash -lc 'moon run daemon:docs'
+        language: system
+        pass_filenames: false
+        files: ^apps/daemon/
+
+      - id: daemon-format-check
+        name: daemon format check
+        entry: bash -lc 'moon run daemon:format-check'
+        language: system
+        pass_filenames: false
+        files: ^apps/daemon/
+
+      - id: daemon-format-fix
+        name: daemon format fix
+        entry: bash -lc 'moon run daemon:format-fix'
+        language: system
+        pass_filenames: false
+        files: ^apps/daemon/
+
+      - id: daemon-lint
+        name: daemon lint
+        entry: bash -lc 'moon run daemon:lint'
+        language: system
+        pass_filenames: false
+        files: ^apps/daemon/
+
+      - id: daemon-tests
+        name: daemon tests
+        entry: bash -lc 'moon run daemon:test'
+        language: system
+        pass_filenames: false
+        files: ^apps/daemon/
+        stages: [pre-push]
+
+      - id: web-check
+        name: web check
+        entry: bash -lc 'moon run web:check'
+        language: system
+        pass_filenames: false
+        files: ^apps/web/
+
+      - id: web-complexity
+        name: web complexity
+        entry: bash -lc 'moon run web:complexity'
+        language: system
+        pass_filenames: false
+        files: ^apps/web/
+
+      - id: web-docs
+        name: web docs check
+        entry: bash -lc 'moon run web:docs'
+        language: system
+        pass_filenames: false
+        files: ^apps/web/
+
+      - id: web-format-check
+        name: web format check
+        entry: bash -lc 'moon run web:format-check'
+        language: system
+        pass_filenames: false
+        files: ^apps/web/
+
+      - id: web-format-fix
+        name: web format fix
+        entry: bash -lc 'moon run web:format-fix'
+        language: system
+        pass_filenames: false
+        files: ^apps/web/
+
+      - id: web-lint
+        name: web lint
+        entry: bash -lc 'moon run web:lint'
+        language: system
+        pass_filenames: false
+        files: ^apps/web/
+
+      - id: web-tests
+        name: web tests
+        entry: bash -lc 'moon run web:test'
+        language: system
+        pass_filenames: false
+        files: ^apps/web/
+        stages: [pre-push]

@@ -1,0 +1,14 @@
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - .github/workflows/**
+
+daemon:
+  - changed-files:
+      - any-glob-to-any-file:
+          - apps/daemon/**
+
+web:
+  - changed-files:
+      - any-glob-to-any-file:
+          - apps/web/**

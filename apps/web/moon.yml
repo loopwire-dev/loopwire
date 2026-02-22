@@ -1,0 +1,101 @@
+language: typescript
+stack: frontend
+layer: application
+
+fileGroups:
+  sources:
+    - 'src/**/*'
+  configs:
+    - 'tsconfig.json'
+    - 'package.json'
+
+tasks:
+  setup:
+    command: 'bash -lc "TMPDIR=/tmp bun install"'
+    options:
+      envFile: '/.env'
+      runInCI: false
+
+  dev:
+    command: 'bunx --bun vite'
+    preset: server
+    options:
+      envFile: '/.env'
+
+  build:
+    command: 'bunx --bun vite build'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+      - 'index.html'
+      - 'vite.config.ts'
+    outputs:
+      - 'dist'
+    options:
+      envFile: '/.env'
+
+  preview:
+    command: 'bunx --bun vite preview'
+    preset: server
+    options:
+      envFile: '/.env'
+
+  check:
+    script: 'bun run typecheck'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+
+  format-check:
+    script: 'bun run format:check'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+
+  format-fix:
+    script: 'bun run format'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+
+  lint:
+    script: 'bun run lint'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+
+  test:
+    script: 'bun run test'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+
+  docs:
+    script: 'bun run docs'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+
+  complexity:
+    command: >-
+      bash -lc 'qlty metrics apps/web;
+      qlty smells --no-snippets apps/web || true'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+
+  coverage:
+    script: 'bun run coverage'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+    outputs:
+      - 'coverage'
+
+  quality:
+    command: 'echo "web quality checks passed"'
+    deps:
+      - 'check'
+      - 'format-check'
+      - 'lint'
+      - 'test'

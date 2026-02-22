@@ -1,0 +1,90 @@
+language: rust
+stack: backend
+layer: application
+
+fileGroups:
+  sources:
+    - 'crates/**/src/**/*'
+  configs:
+    - 'Cargo.toml'
+    - 'crates/*/Cargo.toml'
+
+tasks:
+  setup:
+    command: >-
+      bash -lc 'if cargo watch --version >/dev/null 2>&1; then
+      echo "cargo-watch already installed.";
+      else
+      cargo install cargo-watch@8.5.3 || echo "Skipping cargo-watch install (offline or install failed).";
+      fi'
+    options:
+      envFile: '/.env'
+      runInCI: false
+
+  dev:
+    script: 'cargo watch -x "run --bin loopwired -- start"'
+    deps:
+      - 'setup'
+    preset: server
+    options:
+      envFile: '/.env'
+
+  check:
+    script: 'cargo check --workspace'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+
+  format-check:
+    script: 'cargo fmt --all -- --check'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+
+  format-fix:
+    script: 'cargo fmt --all'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+
+  lint:
+    script: 'cargo clippy --workspace --all-targets -- -D warnings'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+
+  test:
+    script: 'cargo test --workspace'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+
+  docs:
+    script: "RUSTDOCFLAGS='-D warnings -D missing-docs' cargo doc -p loopwired --no-deps"
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+
+  complexity:
+    command: >-
+      bash -lc 'qlty metrics apps/daemon;
+      qlty smells --no-snippets apps/daemon || true'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+
+  coverage:
+    script: 'cargo llvm-cov --workspace --lcov --output-path lcov.info --fail-under-lines 1'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+    outputs:
+      - 'lcov.info'
+
+  quality:
+    command: 'echo "daemon quality checks passed"'
+    deps:
+      - 'check'
+      - 'format-check'
+      - 'lint'
+      - 'test'

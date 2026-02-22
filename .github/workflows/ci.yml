@@ -1,0 +1,155 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  LOOPWIRE_FRONTEND_URL: http://localhost:5173
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  daemon:
+    name: Daemon
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: moonrepo/setup-toolchain@v0
+
+      - uses: qltysh/qlty-action/install@v2
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.84.0"
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/daemon
+
+      - name: Check
+        run: moon run daemon:check
+
+      - name: Format check
+        run: moon run daemon:format-check
+
+      - name: Lint
+        run: moon run daemon:lint
+
+      - name: Test
+        run: moon run daemon:test
+
+      - name: Complexity report
+        continue-on-error: true
+        run: moon run daemon:complexity
+
+  web:
+    name: Web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: moonrepo/setup-toolchain@v0
+
+      - uses: qltysh/qlty-action/install@v2
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.7"
+
+      - run: moon run web:check
+      - run: moon run web:format-check
+      - run: moon run web:lint
+      - run: moon run web:test
+
+      - name: Complexity report
+        continue-on-error: true
+        run: moon run web:complexity
+
+  coverage-daemon:
+    name: Coverage Daemon
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: moonrepo/setup-toolchain@v0
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.84.0"
+          components: llvm-tools-preview
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/daemon
+
+      - uses: taiki-e/install-action@cargo-llvm-cov
+
+      - run: moon run daemon:coverage
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: apps/daemon/lcov.info
+
+  coverage-web:
+    name: Coverage Web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: moonrepo/setup-toolchain@v0
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.7"
+
+      - run: moon run web:coverage
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: apps/web/coverage
+
+  coverage-upload:
+    name: Coverage Upload
+    needs: [coverage-daemon, coverage-web]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: coverage-artifacts
+
+      - name: Publish coverage reports to Qlty
+        uses: qltysh/qlty-action/coverage@v2
+        with:
+          oidc: true
+          validate: false
+          files: |
+            coverage-artifacts/backend-coverage/lcov.info
+            coverage-artifacts/frontend-coverage/lcov.info

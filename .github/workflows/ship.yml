@@ -1,0 +1,400 @@
+name: Ship
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref (branch, tag, or SHA) to ship
+        required: true
+        default: main
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  deployments: write
+
+env:
+  CARGO_TERM_COLOR: always
+  LOOPWIRE_FRONTEND_URL: https://loopwire.dev
+
+jobs:
+  prepare:
+    name: Prepare Ship Plan
+    runs-on: ubuntu-latest
+    outputs:
+      ship_sha: ${{ steps.plan.outputs.ship_sha }}
+      base_tag: ${{ steps.plan.outputs.base_tag }}
+      base_sha: ${{ steps.plan.outputs.base_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: plan
+        name: Resolve ref and base release point
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git fetch --tags origin
+
+          ship_ref="${{ inputs.ref }}"
+          ship_sha="$(git rev-parse "$ship_ref")"
+          echo "ship_sha=${ship_sha}" >> "$GITHUB_OUTPUT"
+
+          if ! git branch -r --contains "$ship_sha" | grep -q 'origin/main'; then
+            echo "Ref ${ship_ref} (${ship_sha}) is not contained in origin/main."
+            exit 1
+          fi
+
+          base_tag="$(git describe --tags --abbrev=0 --match 'v*' "${ship_sha}^" 2>/dev/null || true)"
+          echo "base_tag=${base_tag}" >> "$GITHUB_OUTPUT"
+
+          if [[ -n "${base_tag}" ]]; then
+            base_sha="$(git rev-list -n 1 "${base_tag}")"
+          else
+            base_sha="$(git rev-list --max-parents=0 "${ship_sha}" | tail -n 1)"
+          fi
+
+          echo "base_sha=${base_sha}" >> "$GITHUB_OUTPUT"
+
+  detect-changes:
+    name: Detect Changed Services
+    needs: prepare
+    runs-on: ubuntu-latest
+    outputs:
+      web_changed: ${{ steps.changes.outputs.web }}
+      daemon_changed: ${{ steps.changes.outputs.daemon }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.prepare.outputs.ship_sha }}
+
+      - id: changes
+        name: Detect paths
+        uses: dorny/paths-filter@v3
+        with:
+          base: ${{ needs.prepare.outputs.base_sha }}
+          ref: ${{ needs.prepare.outputs.ship_sha }}
+          filters: |
+            daemon:
+              - 'apps/daemon/**'
+              - '.github/workflows/ship.yml'
+              - 'scripts/install.sh'
+            web:
+              - 'apps/web/**'
+              - '.github/workflows/ship.yml'
+
+  compute-daemon-tag:
+    name: Compute Daemon Tag
+    needs: [prepare, detect-changes]
+    if: needs.detect-changes.outputs.daemon_changed == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      daemon_tag: ${{ steps.version.outputs.daemon_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.prepare.outputs.ship_sha }}
+
+      - id: version
+        name: Compute semantic version tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          base_tag="${{ needs.prepare.outputs.base_tag }}"
+          ship_sha="${{ needs.prepare.outputs.ship_sha }}"
+
+          if [[ -n "${base_tag}" ]]; then
+            range="${base_tag}..${ship_sha}"
+            base_version="${base_tag#v}"
+          else
+            base_commit="${{ needs.prepare.outputs.base_sha }}"
+            range="${base_commit}..${ship_sha}"
+            base_version="0.0.0"
+          fi
+
+          if [[ -n "${base_tag}" ]]; then
+            echo "Using previous tag ${base_tag} in range ${range}"
+          else
+            echo "No previous tag found; using initial base ${range}"
+          fi
+
+          major=0
+          minor=0
+          patch=0
+          IFS='.' read -r major minor patch <<< "${base_version}"
+
+          commits="$(git log --format='%s%n%b' "${range}" || true)"
+
+          bump="patch"
+          if echo "${commits}" | grep -Eq 'BREAKING CHANGE|^[^[:space:]]+(\([^)]+\))?!:'; then
+            bump="major"
+          elif echo "${commits}" | grep -Eq '^feat(\([^)]+\))?:'; then
+            bump="minor"
+          fi
+
+          case "${bump}" in
+            major)
+              major=$((major + 1))
+              minor=0
+              patch=0
+              ;;
+            minor)
+              minor=$((minor + 1))
+              patch=0
+              ;;
+            patch)
+              patch=$((patch + 1))
+              ;;
+          esac
+
+          daemon_tag="v${major}.${minor}.${patch}"
+          echo "daemon_tag=${daemon_tag}" >> "$GITHUB_OUTPUT"
+          echo "Computed daemon tag: ${daemon_tag} (bump: ${bump})"
+
+  verify-web:
+    name: Verify Web
+    needs: [prepare, detect-changes]
+    if: needs.detect-changes.outputs.web_changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.ship_sha }}
+
+      - uses: moonrepo/setup-toolchain@v0
+
+      - uses: qltysh/qlty-action/install@v2
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.7"
+
+      - run: moon run web:check
+      - run: moon run web:format-check
+      - run: moon run web:lint
+      - run: moon run web:test
+
+  verify-daemon:
+    name: Verify Daemon
+    needs: [prepare, detect-changes]
+    if: needs.detect-changes.outputs.daemon_changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.ship_sha }}
+
+      - uses: moonrepo/setup-toolchain@v0
+
+      - uses: qltysh/qlty-action/install@v2
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.84.0"
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/daemon
+
+      - run: moon run daemon:check
+      - run: moon run daemon:format-check
+      - run: moon run daemon:lint
+      - run: moon run daemon:test
+
+  deploy-web:
+    name: Deploy Web
+    needs: [prepare, detect-changes, verify-web]
+    if: needs.detect-changes.outputs.web_changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.ship_sha }}
+
+      - uses: moonrepo/setup-toolchain@v0
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.7"
+
+      - run: moon run web:build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: loopwire
+          directory: apps/web/dist
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+
+  create-daemon-tag:
+    name: Create Daemon Tag
+    needs: [prepare, detect-changes, verify-daemon, compute-daemon-tag]
+    if: needs.detect-changes.outputs.daemon_changed == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      daemon_tag: ${{ steps.tag.outputs.daemon_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: tag
+        name: Create and push tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="${{ needs.compute-daemon-tag.outputs.daemon_tag }}"
+          sha="${{ needs.prepare.outputs.ship_sha }}"
+
+          if [[ -z "${tag}" ]]; then
+            echo "daemon_tag is empty."
+            exit 1
+          fi
+
+          git fetch --tags origin
+
+          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+            existing_sha="$(git rev-list -n 1 "${tag}")"
+            if [[ "${existing_sha}" != "${sha}" ]]; then
+              echo "Tag ${tag} already exists at ${existing_sha}, expected ${sha}."
+              exit 1
+            fi
+            echo "Tag ${tag} already exists at desired commit."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "${tag}" "${sha}" -m "Release ${tag}"
+            git push origin "${tag}"
+          fi
+
+          echo "daemon_tag=${tag}" >> "$GITHUB_OUTPUT"
+
+  build-daemon:
+    name: Build Daemon (${{ matrix.target }})
+    needs: [prepare, detect-changes, create-daemon-tag]
+    if: needs.detect-changes.outputs.daemon_changed == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            artifact: loopwired-linux-amd64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            artifact: loopwired-linux-arm64
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            artifact: loopwired-darwin-amd64
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            artifact: loopwired-darwin-arm64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.ship_sha }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.84.0"
+          targets: ${{ matrix.target }}
+
+      - name: Install cross-compilation tools
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/daemon
+
+      - name: Build
+        working-directory: apps/daemon
+        run: cargo build --release --target ${{ matrix.target }}
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+
+      - name: Rename binary
+        shell: bash
+        run: |
+          cp apps/daemon/target/${{ matrix.target }}/release/loopwired ${{ matrix.artifact }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+
+  publish-daemon-release:
+    name: Publish Daemon Release
+    needs: [prepare, detect-changes, create-daemon-tag, build-daemon]
+    if: needs.detect-changes.outputs.daemon_changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - id: assets
+        name: Prepare release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=()
+
+          if ! find artifacts -type f -name 'loopwired-*' | grep -q .; then
+            echo "Expected daemon artifacts but none were found."
+            exit 1
+          fi
+
+          while IFS= read -r f; do
+            files+=("$f")
+          done < <(find artifacts -type f -name 'loopwired-*' | sort)
+
+          find artifacts -type f -name 'loopwired-*' -exec shasum -a 256 {} \; | \
+            sed 's|  artifacts/[^/]*/||' > artifacts/checksums.sha256
+          cat artifacts/checksums.sha256
+          files+=("artifacts/checksums.sha256")
+
+          {
+            echo "paths<<EOF"
+            printf '%s\n' "${files[@]}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.create-daemon-tag.outputs.daemon_tag }}
+          target_commitish: ${{ needs.prepare.outputs.ship_sha }}
+          files: ${{ steps.assets.outputs.paths }}
+          generate_release_notes: true
+
+  summary:
+    name: Ship Summary
+    needs: [prepare, detect-changes, compute-daemon-tag, deploy-web, publish-daemon-release]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print ship summary
+        run: |
+          echo "ship_sha=${{ needs.prepare.outputs.ship_sha }}"
+          echo "base_tag=${{ needs.prepare.outputs.base_tag }}"
+          echo "web_changed=${{ needs.detect-changes.outputs.web_changed }}"
+          echo "daemon_changed=${{ needs.detect-changes.outputs.daemon_changed }}"
+          echo "daemon_tag=${{ needs.compute-daemon-tag.outputs.daemon_tag }}"

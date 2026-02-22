@@ -1,0 +1,45 @@
+tasks:
+  check:
+    command: 'cargo check --workspace'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+    options:
+      envFile: '/.env'
+
+  build:
+    command: 'cargo build --workspace'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+    options:
+      envFile: '/.env'
+
+  build-release:
+    command: 'cargo build --workspace --release'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+    options:
+      envFile: '/.env'
+
+  test:
+    command: 'cargo test --workspace'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+    options:
+      envFile: '/.env'
+
+  lint:
+    command: 'cargo clippy --workspace -- -D warnings'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+    options:
+      envFile: '/.env'
+
+  format:
+    command: 'cargo fmt --all -- --check'
+    inputs:
+      - '@group(sources)'

@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+target/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Moonrepo
+.moon/cache/
+
+# Logs
+*.log
+
+# Qlty
+.qlty/*
+!.qlty/qlty.toml

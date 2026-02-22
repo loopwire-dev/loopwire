@@ -1,0 +1,32 @@
+[package]
+name = "lw-api"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+lw-pty.workspace = true
+lw-agent.workspace = true
+
+lw-fs.workspace = true
+lw-config.workspace = true
+axum.workspace = true
+tower-http.workspace = true
+tokio.workspace = true
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+rand.workspace = true
+sha2.workspace = true
+hex.workspace = true
+reqwest.workspace = true
+base64 = "0.22"
+hostname.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt"] }

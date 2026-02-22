@@ -1,0 +1,11 @@
+[
+  {"name":"bug","color":"D73A4A","description":"Something is not working"},
+  {"name":"ci","color":"FBCA04","description":"CI or workflow changes"},
+  {"name":"daemon","color":"5319E7","description":"Changes in apps/daemon"},
+  {"name":"enhancement","color":"A2EEEF","description":"New feature or request"},
+  {"name":"needs-triage","color":"BFD4F2","description":"Needs initial triage"},
+  {"name":"priority:high","color":"B60205","description":"High priority"},
+  {"name":"priority:medium","color":"D93F0B","description":"Medium priority"},
+  {"name":"priority:low","color":"FBCA04","description":"Low priority"},
+  {"name":"web","color":"1D76DB","description":"Changes in apps/web"}
+]
