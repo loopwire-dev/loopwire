@@ -178,7 +178,6 @@ jobs:
         with:
           bun-version: "1.3.7"
 
-      - run: bun install --frozen-lockfile
       - run: moon run web:check
       - run: moon run web:format-check
       - run: moon run web:lint
@@ -201,7 +200,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.84.0"
-          components: clippy, rustfmt
+          components: clippy
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -228,7 +227,6 @@ jobs:
         with:
           bun-version: "1.3.7"
 
-      - run: bun install --frozen-lockfile
       - run: moon run web:build
 
       - name: Deploy to Cloudflare Pages
