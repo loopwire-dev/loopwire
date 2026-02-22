@@ -24,7 +24,6 @@ bun run lint
 bun run typecheck
 bun run test
 bun run coverage
-bun run quality
 ```
 
 ## Moon tasks
@@ -34,5 +33,4 @@ moon run web:dev
 moon run web:build
 moon run web:quality
 moon run web:coverage
-moon run root:git-add
 ```

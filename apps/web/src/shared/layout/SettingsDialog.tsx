@@ -15,7 +15,14 @@ import {
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { type ReactNode, useEffect, useState } from "react";
-import { api } from "../lib/api";
+import {
+	type HealthResponseDto,
+	type ShareStatusDto,
+	health,
+	remoteShareStart,
+	remoteShareStatus,
+	remoteShareStop,
+} from "../lib/daemon/rest";
 import type { Theme } from "../lib/theme";
 import { useAppStore } from "../stores/app-store";
 import { Dialog } from "../ui/Dialog";
@@ -102,13 +109,7 @@ function GeneralSection() {
 	const [shareBusy, setShareBusy] = useState(false);
 	const [shareError, setShareError] = useState<string | null>(null);
 	const [copied, setCopied] = useState(false);
-	const [shareStatus, setShareStatus] = useState<{
-		active: boolean;
-		connect_url: string | null;
-		expires_at: string | null;
-		pin_required: boolean;
-		provider: string | null;
-	} | null>(null);
+	const [shareStatus, setShareStatus] = useState<ShareStatusDto | null>(null);
 
 	const isActive = !!shareStatus?.active;
 
@@ -118,13 +119,7 @@ function GeneralSection() {
 
 	async function refreshShareStatus() {
 		try {
-			const status = await api.get<{
-				active: boolean;
-				connect_url: string | null;
-				expires_at: string | null;
-				pin_required: boolean;
-				provider: string | null;
-			}>("/remote/share/status");
+			const status = await remoteShareStatus();
 			setShareStatus(status);
 		} catch {
 			setShareStatus(null);
@@ -135,14 +130,7 @@ function GeneralSection() {
 		setShareBusy(true);
 		setShareError(null);
 		try {
-			const res = await api.post<{
-				connect_url: string;
-				expires_at: string;
-				pin_required: boolean;
-				provider: string;
-			}>("/remote/share/start", {
-				pin: sharePin.trim() || undefined,
-			});
+			const res = await remoteShareStart(sharePin);
 			setShareStatus({
 				active: true,
 				connect_url: res.connect_url,
@@ -163,7 +151,7 @@ function GeneralSection() {
 		setShareBusy(true);
 		setShareError(null);
 		try {
-			await api.post("/remote/share/stop");
+			await remoteShareStop();
 			setShareStatus({
 				active: false,
 				connect_url: null,
@@ -321,14 +309,6 @@ function GeneralSection() {
 	);
 }
 
-interface MachineInfo {
-	version: string;
-	hostname: string;
-	os: string;
-	arch: string;
-	uptime_secs: number;
-}
-
 function formatUptime(secs: number): string {
 	const d = Math.floor(secs / 86400);
 	const h = Math.floor((secs % 86400) / 3600);
@@ -341,11 +321,10 @@ function formatUptime(secs: number): string {
 function AccountSection() {
 	const logout = useAppStore((s) => s.logout);
 	const setSettingsOpen = useAppStore((s) => s.setSettingsOpen);
-	const [machine, setMachine] = useState<MachineInfo | null>(null);
+	const [machine, setMachine] = useState<HealthResponseDto | null>(null);
 
 	useEffect(() => {
-		void api
-			.get<MachineInfo>("/health")
+		void health()
 			.then(setMachine)
 			.catch(() => {});
 	}, []);

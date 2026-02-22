@@ -9,10 +9,13 @@ fileGroups:
     - 'tsconfig.json'
     - 'package.json'
 
-dependsOn:
-  - types
-
 tasks:
+  setup:
+    command: 'bash -lc "TMPDIR=/tmp bun install"'
+    options:
+      envFile: '/.env'
+      runInCI: false
+
   dev:
     command: 'bunx --bun vite'
     preset: server
@@ -37,26 +40,52 @@ tasks:
     options:
       envFile: '/.env'
 
-  format:
-    command: 'bun run format'
+  check:
+    script: 'bun run typecheck'
     inputs:
       - '@group(sources)'
       - '@group(configs)'
 
   format-check:
-    command: 'bun run format:check'
+    script: 'bun run format:check'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+
+  format-fix:
+    script: 'bun run format'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+
+  lint:
+    script: 'bun run lint'
     inputs:
       - '@group(sources)'
       - '@group(configs)'
 
   test:
-    command: 'bun run test'
+    script: 'bun run test'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+
+  docs:
+    script: 'bun run docs'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+
+  complexity:
+    command: >-
+      bash -lc 'qlty metrics apps/web;
+      qlty smells --no-snippets apps/web || true'
     inputs:
       - '@group(sources)'
       - '@group(configs)'
 
   coverage:
-    command: 'bun run coverage'
+    script: 'bun run coverage'
     inputs:
       - '@group(sources)'
       - '@group(configs)'
@@ -66,7 +95,7 @@ tasks:
   quality:
     command: 'echo "web quality checks passed"'
     deps:
+      - 'check'
       - 'format-check'
       - 'lint'
-      - 'typecheck'
       - 'test'

@@ -1,6 +1,6 @@
 import { Folder } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api } from "../../shared/lib/api";
+import { fsBrowse, fsRoots } from "../../shared/lib/daemon/rest";
 import { Button } from "../../shared/ui/Button";
 import type { DirEntry } from "./useFileSystem";
 
@@ -10,7 +10,7 @@ function fetchFsBrowse(path: string): Promise<DirEntry[]> {
 	const existing = fsBrowseInFlight.get(path);
 	if (existing) return existing;
 
-	const request = api.get<DirEntry[]>("/fs/browse", { path }).finally(() => {
+	const request = fsBrowse(path).finally(() => {
 		fsBrowseInFlight.delete(path);
 	});
 
@@ -25,7 +25,7 @@ const fsRootsInFlight: { promise: Promise<{ roots: string[] }> | null } = {
 function fetchFsRoots(): Promise<{ roots: string[] }> {
 	if (fsRootsInFlight.promise) return fsRootsInFlight.promise;
 
-	const request = api.get<{ roots: string[] }>("/fs/roots").finally(() => {
+	const request = fsRoots().finally(() => {
 		fsRootsInFlight.promise = null;
 	});
 

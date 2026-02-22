@@ -89,7 +89,8 @@ export function WorkspaceItem({
 				active={compact || !isDragging}
 				content={compact ? root.name : root.path}
 			>
-				<div
+				<button
+					type="button"
 					className={`group relative h-9 w-full rounded-lg px-3 text-sm cursor-pointer overflow-hidden transition-colors text-left ${
 						isActive ? "font-medium" : SIDEBAR_TAB_HOVER_CLASS
 					}`}
@@ -172,7 +173,7 @@ export function WorkspaceItem({
 							</div>
 						)}
 					</div>
-				</div>
+				</button>
 			</MaybeTooltip>
 		</div>
 	);

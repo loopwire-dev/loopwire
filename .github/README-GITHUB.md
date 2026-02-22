@@ -4,13 +4,8 @@ Repository automation and governance.
 
 ## Workflows
 
-- `docs-coverage.yml`: checks README coverage for key project directories.
-- `ci.yml`: lint/typecheck/test/build checks.
-- `coverage.yml`: frontend and backend coverage generation + upload.
-- `prek.yml`: repository hook checks from `.pre-commit-config.yaml`.
-- `release.yml`: release artifacts.
-- `deploy.yml`: frontend deployment.
-- `pr-governance.yml`: PR template/body enforcement.
+- `ci.yml`: lint/typecheck/test checks, coverage generation, and coverage upload to Qlty.
+- `ship.yml`: manually triggered shipping flow (detect changes, deploy web, tag/release daemon).
 - `labeler.yml`: automatic PR labels from changed paths.
 - `sync-labels.yml`: sync label catalog from `.github/labels.json`.
 

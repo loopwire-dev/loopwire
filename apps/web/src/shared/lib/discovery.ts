@@ -72,6 +72,9 @@ function buildCandidates(port: number): string[] {
 	return candidates;
 }
 
+/**
+ * Probes local-network candidates and returns the first healthy daemon URL.
+ */
 export async function discoverDaemon(
 	port: number = DEFAULT_PORT,
 ): Promise<string | null> {
@@ -99,6 +102,9 @@ export async function discoverDaemon(
 	}
 }
 
+/**
+ * Clears the cached discovery result for the current browser session.
+ */
 export function clearDiscoveryCache(): void {
 	sessionStorage.removeItem(DISCOVERY_CACHE_KEY);
 }

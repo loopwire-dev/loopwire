@@ -37,59 +37,6 @@ fn is_private_network_origin(origin: &str) -> bool {
     host == "localhost"
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn is_private_network_origin_localhost() {
-        assert!(is_private_network_origin("http://localhost:3000"));
-    }
-
-    #[test]
-    fn is_private_network_origin_127() {
-        assert!(is_private_network_origin("http://127.0.0.1:9400"));
-        assert!(is_private_network_origin("http://127.0.0.2:80"));
-    }
-
-    #[test]
-    fn is_private_network_origin_10() {
-        assert!(is_private_network_origin("http://10.0.0.1:8080"));
-        assert!(is_private_network_origin("http://10.255.255.255"));
-    }
-
-    #[test]
-    fn is_private_network_origin_172() {
-        assert!(is_private_network_origin("http://172.16.0.1:443"));
-        assert!(is_private_network_origin("http://172.31.255.255"));
-        assert!(!is_private_network_origin("http://172.15.0.1"));
-        assert!(!is_private_network_origin("http://172.32.0.1"));
-    }
-
-    #[test]
-    fn is_private_network_origin_192_168() {
-        assert!(is_private_network_origin("http://192.168.1.100:3000"));
-        assert!(is_private_network_origin("https://192.168.0.1"));
-    }
-
-    #[test]
-    fn is_private_network_origin_local_mdns() {
-        assert!(is_private_network_origin("http://myhost.local:9400"));
-    }
-
-    #[test]
-    fn is_private_network_origin_public_ips() {
-        assert!(!is_private_network_origin("http://8.8.8.8"));
-        assert!(!is_private_network_origin("https://1.1.1.1:443"));
-        assert!(!is_private_network_origin("http://203.0.113.1"));
-    }
-
-    #[test]
-    fn is_private_network_origin_public_domain() {
-        assert!(!is_private_network_origin("https://example.com"));
-    }
-}
-
 pub fn build_router(state: AppState) -> Router {
     let lan_enabled = state.config.lan.enabled && !state.config.host.is_loopback();
     let frontend_origin = state.config.frontend_url.clone();
@@ -226,4 +173,57 @@ pub fn build_router(state: AppState) -> Router {
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn is_private_network_origin_localhost() {
+        assert!(is_private_network_origin("http://localhost:3000"));
+    }
+
+    #[test]
+    fn is_private_network_origin_127() {
+        assert!(is_private_network_origin("http://127.0.0.1:9400"));
+        assert!(is_private_network_origin("http://127.0.0.2:80"));
+    }
+
+    #[test]
+    fn is_private_network_origin_10() {
+        assert!(is_private_network_origin("http://10.0.0.1:8080"));
+        assert!(is_private_network_origin("http://10.255.255.255"));
+    }
+
+    #[test]
+    fn is_private_network_origin_172() {
+        assert!(is_private_network_origin("http://172.16.0.1:443"));
+        assert!(is_private_network_origin("http://172.31.255.255"));
+        assert!(!is_private_network_origin("http://172.15.0.1"));
+        assert!(!is_private_network_origin("http://172.32.0.1"));
+    }
+
+    #[test]
+    fn is_private_network_origin_192_168() {
+        assert!(is_private_network_origin("http://192.168.1.100:3000"));
+        assert!(is_private_network_origin("https://192.168.0.1"));
+    }
+
+    #[test]
+    fn is_private_network_origin_local_mdns() {
+        assert!(is_private_network_origin("http://myhost.local:9400"));
+    }
+
+    #[test]
+    fn is_private_network_origin_public_ips() {
+        assert!(!is_private_network_origin("http://8.8.8.8"));
+        assert!(!is_private_network_origin("https://1.1.1.1:443"));
+        assert!(!is_private_network_origin("http://203.0.113.1"));
+    }
+
+    #[test]
+    fn is_private_network_origin_public_domain() {
+        assert!(!is_private_network_origin("https://example.com"));
+    }
 }

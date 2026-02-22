@@ -1,6 +1,9 @@
 import { useAppStore } from "../stores/app-store";
 import { getWsUrl } from "./config";
 
+/**
+ * WebSocket envelope exchanged with the daemon realtime API.
+ */
 export interface WsEnvelope {
 	version: number;
 	request_id: string | null;
@@ -207,4 +210,7 @@ class WsClient {
 	}
 }
 
+/**
+ * Shared WebSocket client singleton for daemon event streams and RPC-style calls.
+ */
 export const wsClient = new WsClient();

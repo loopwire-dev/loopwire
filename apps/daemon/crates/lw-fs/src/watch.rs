@@ -1,6 +1,8 @@
-use notify::{
-    event::ModifyKind, Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
-};
+#[cfg(test)]
+use notify::PollWatcher;
+#[cfg(not(test))]
+use notify::RecommendedWatcher;
+use notify::{event::ModifyKind, Config, Event, EventKind, RecursiveMode, Watcher};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::Path;
@@ -24,8 +26,29 @@ pub enum FsEventKind {
 }
 
 struct WatchEntry {
-    _watcher: RecommendedWatcher,
+    _watcher: WatcherHandle,
     tx: broadcast::Sender<FsEvent>,
+}
+
+#[cfg(not(test))]
+enum WatcherHandle {
+    Recommended(RecommendedWatcher),
+}
+
+#[cfg(test)]
+enum WatcherHandle {
+    Poll(PollWatcher),
+}
+
+impl WatcherHandle {
+    fn watch(&mut self, path: &Path) -> notify::Result<()> {
+        match self {
+            #[cfg(not(test))]
+            WatcherHandle::Recommended(watcher) => watcher.watch(path, RecursiveMode::Recursive),
+            #[cfg(test)]
+            WatcherHandle::Poll(watcher) => watcher.watch(path, RecursiveMode::Recursive),
+        }
+    }
 }
 
 pub struct FsWatcher {
@@ -53,41 +76,58 @@ impl FsWatcher {
             return Ok(entry.tx.subscribe());
         }
 
-        let full_path = workspace_root.join(relative_path);
+        let full_path = if relative_path.is_empty() || relative_path == "." {
+            workspace_root.to_path_buf()
+        } else {
+            workspace_root.join(relative_path)
+        };
+        if !full_path.exists() {
+            anyhow::bail!("watch path does not exist: {}", full_path.display());
+        }
+        let watch_path = full_path.canonicalize().unwrap_or(full_path);
         let (tx, rx) = broadcast::channel(256);
         let tx_clone = tx.clone();
-        let root = workspace_root.to_path_buf();
+        let root = workspace_root
+            .canonicalize()
+            .unwrap_or_else(|_| workspace_root.to_path_buf());
 
-        let mut watcher = RecommendedWatcher::new(
-            move |result: Result<Event, notify::Error>| match result {
-                Ok(event) => {
-                    let kind = match event.kind {
-                        EventKind::Create(_) => FsEventKind::Create,
-                        EventKind::Modify(ModifyKind::Name(_)) => FsEventKind::Rename,
-                        EventKind::Modify(_) => FsEventKind::Modify,
-                        EventKind::Remove(_) => FsEventKind::Delete,
-                        _ => return,
-                    };
-                    for path in &event.paths {
-                        let relative = path
-                            .strip_prefix(&root)
-                            .unwrap_or(path)
-                            .to_string_lossy()
-                            .to_string();
-                        let _ = tx_clone.send(FsEvent {
-                            kind: kind.clone(),
-                            path: relative,
-                        });
-                    }
+        let callback = move |result: Result<Event, notify::Error>| match result {
+            Ok(event) => {
+                let kind = match event.kind {
+                    EventKind::Create(_) => FsEventKind::Create,
+                    EventKind::Modify(ModifyKind::Name(_)) => FsEventKind::Rename,
+                    EventKind::Modify(_) => FsEventKind::Modify,
+                    EventKind::Remove(_) => FsEventKind::Delete,
+                    _ => return,
+                };
+                for path in &event.paths {
+                    let relative = path
+                        .strip_prefix(&root)
+                        .unwrap_or(path)
+                        .to_string_lossy()
+                        .to_string();
+                    let _ = tx_clone.send(FsEvent {
+                        kind: kind.clone(),
+                        path: relative,
+                    });
                 }
-                Err(e) => {
-                    tracing::warn!("File watcher error: {e}");
-                }
-            },
-            Config::default(),
-        )?;
+            }
+            Err(e) => {
+                tracing::warn!("File watcher error: {e}");
+            }
+        };
 
-        watcher.watch(&full_path, RecursiveMode::Recursive)?;
+        #[cfg(test)]
+        let mut watcher = WatcherHandle::Poll(PollWatcher::new(
+            callback,
+            Config::default().with_poll_interval(std::time::Duration::from_millis(100)),
+        )?);
+
+        #[cfg(not(test))]
+        let mut watcher =
+            WatcherHandle::Recommended(RecommendedWatcher::new(callback, Config::default())?);
+
+        watcher.watch(&watch_path)?;
 
         watches.insert(
             key,

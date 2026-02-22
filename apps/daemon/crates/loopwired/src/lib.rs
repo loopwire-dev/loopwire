@@ -1,3 +1,5 @@
+//! Shared helpers and response types used by the `loopwired` daemon binary.
+
 use mdns_sd::{ServiceDaemon, ServiceInfo};
 use serde::Deserialize;
 use std::fs;
@@ -8,21 +10,25 @@ use std::path::Path;
 // PID file management
 // ---------------------------------------------------------------------------
 
+/// Reads the daemon PID from `path`, returning `None` if missing or invalid.
 pub fn read_pid_file(path: &Path) -> Option<u32> {
     fs::read_to_string(path)
         .ok()
         .and_then(|s| s.trim().parse().ok())
 }
 
+/// Writes the current process PID to `path`.
 pub fn write_pid_file(path: &Path) -> anyhow::Result<()> {
     fs::write(path, std::process::id().to_string())?;
     Ok(())
 }
 
+/// Removes the PID file at `path` if it exists.
 pub fn remove_pid_file(path: &Path) {
     let _ = fs::remove_file(path);
 }
 
+/// Returns `true` when a process with `pid` appears to be alive.
 pub fn is_process_alive(pid: u32) -> bool {
     #[cfg(unix)]
     {
@@ -39,6 +45,7 @@ pub fn is_process_alive(pid: u32) -> bool {
 // Network
 // ---------------------------------------------------------------------------
 
+/// Returns detected local IPv4 LAN addresses for daemon advertisement.
 pub fn get_lan_addresses() -> Vec<Ipv4Addr> {
     let mut addrs = Vec::new();
     if let Ok(local) = std::net::UdpSocket::bind("0.0.0.0:0").and_then(|s| {
@@ -54,6 +61,7 @@ pub fn get_lan_addresses() -> Vec<Ipv4Addr> {
     addrs
 }
 
+/// Registers the Loopwire daemon service over mDNS on `port`.
 pub fn register_mdns(port: u16) -> anyhow::Result<ServiceDaemon> {
     let mdns = ServiceDaemon::new()?;
     let host = hostname::get()
@@ -94,21 +102,34 @@ pub fn register_mdns(port: u16) -> anyhow::Result<ServiceDaemon> {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize, PartialEq)]
+/// Response payload returned when starting a remote-share session.
 pub struct ShareStartResponse {
+    /// Public URL used by clients to connect.
     pub connect_url: String,
+    /// Public backend base URL for API access.
     pub public_backend_url: String,
+    /// RFC3339 expiration timestamp for this share.
     pub expires_at: String,
+    /// Indicates whether PIN verification is required.
     pub pin_required: bool,
+    /// Active remote provider identifier.
     pub provider: String,
 }
 
 #[derive(Debug, Deserialize, PartialEq)]
+/// Response payload describing current remote-share status.
 pub struct ShareStatusResponse {
+    /// Whether remote sharing is currently active.
     pub active: bool,
+    /// Active provider identifier when sharing is enabled.
     pub provider: Option<String>,
+    /// Public backend URL when sharing is enabled.
     pub public_backend_url: Option<String>,
+    /// Connect URL when sharing is enabled.
     pub connect_url: Option<String>,
+    /// RFC3339 expiration timestamp when sharing is enabled.
     pub expires_at: Option<String>,
+    /// Indicates whether PIN verification is required.
     pub pin_required: bool,
 }
 

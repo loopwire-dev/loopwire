@@ -23,3 +23,7 @@ target/
 
 # Logs
 *.log
+
+# Qlty
+.qlty/*
+!.qlty/qlty.toml

@@ -7,7 +7,10 @@ import {
 } from "lucide-react";
 import { Fragment, useEffect, useState } from "react";
 import { SettingsDialog } from "../../shared/layout/SettingsDialog";
-import { api } from "../../shared/lib/api";
+import {
+	removeWorkspace as removeWorkspaceApi,
+	updateWorkspaceSettings,
+} from "../../shared/lib/daemon/rest";
 import {
 	useAppStore,
 	workspaceStoreKeyForSelection,
@@ -30,7 +33,7 @@ function syncSettingsToBackend(entry: {
 	pinned?: boolean;
 	icon?: string | null;
 }) {
-	api.post("/workspaces/settings", entry).catch(() => {});
+	updateWorkspaceSettings(entry).catch(() => {});
 }
 
 export function AppSidebar() {
@@ -122,7 +125,7 @@ export function AppSidebar() {
 
 	const removeWorkspace = (path: string) => {
 		removeWorkspaceRoot(path);
-		api.post("/workspaces/remove", { path }).catch(() => {});
+		removeWorkspaceApi(path).catch(() => {});
 		if (path === workspacePath) {
 			clearWorkspace();
 		}

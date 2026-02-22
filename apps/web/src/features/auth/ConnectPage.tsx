@@ -1,23 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../../shared/lib/api";
+import { inviteBootstrap, inviteExchange } from "../../shared/lib/daemon/rest";
 import { useAppStore } from "../../shared/stores/app-store";
 import { Button } from "../../shared/ui/Button";
 import { LoopwireSpinner } from "../../shared/ui/LoopwireSpinner";
 
 const TRUSTED_DEVICES_KEY = "loopwire_trusted_devices";
-
-interface InviteBootstrapResponse {
-	host_id: string;
-	pin_required: boolean;
-	expires_at: string;
-}
-
-interface InviteExchangeResponse {
-	session_token: string;
-	trusted_device_token?: string;
-	trusted_device_expires_at?: string;
-}
 
 interface TrustedDeviceEntry {
 	token: string;
@@ -92,10 +80,7 @@ export function ConnectPage() {
 			setLoading(true);
 			setError(null);
 			try {
-				const bootstrap = await api.post<InviteBootstrapResponse>(
-					"/remote/invite/bootstrap",
-					{ invite_token: inviteToken },
-				);
+				const bootstrap = await inviteBootstrap(inviteToken);
 
 				if (cancelled) return;
 
@@ -137,14 +122,11 @@ export function ConnectPage() {
 		setError(null);
 
 		try {
-			const response = await api.post<InviteExchangeResponse>(
-				"/remote/invite/exchange",
-				{
-					invite_token: invite,
-					pin: providedPin,
-					trusted_device_token: trustedToken,
-				},
-			);
+			const response = await inviteExchange({
+				invite_token: invite,
+				pin: providedPin,
+				trusted_device_token: trustedToken,
+			});
 
 			if (
 				response.trusted_device_token &&

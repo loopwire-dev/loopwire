@@ -38,6 +38,31 @@ fn get_lan_addresses() -> Vec<String> {
     addrs
 }
 
+pub async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
+    let uptime = START_TIME.get().map(|t| t.elapsed().as_secs()).unwrap_or(0);
+
+    let lan_addresses = if state.config.lan.enabled && !state.config.host.is_loopback() {
+        get_lan_addresses()
+    } else {
+        Vec::new()
+    };
+
+    let hostname = hostname::get()
+        .ok()
+        .and_then(|h| h.into_string().ok())
+        .unwrap_or_default();
+
+    Json(HealthResponse {
+        status: "ok".to_string(),
+        version: state.version.to_string(),
+        uptime_secs: uptime,
+        hostname,
+        os: std::env::consts::OS,
+        arch: std::env::consts::ARCH,
+        lan_addresses,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -71,29 +96,4 @@ mod tests {
             assert!(!ip.is_loopback());
         }
     }
-}
-
-pub async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
-    let uptime = START_TIME.get().map(|t| t.elapsed().as_secs()).unwrap_or(0);
-
-    let lan_addresses = if state.config.lan.enabled && !state.config.host.is_loopback() {
-        get_lan_addresses()
-    } else {
-        Vec::new()
-    };
-
-    let hostname = hostname::get()
-        .ok()
-        .and_then(|h| h.into_string().ok())
-        .unwrap_or_default();
-
-    Json(HealthResponse {
-        status: "ok".to_string(),
-        version: state.version.to_string(),
-        uptime_secs: uptime,
-        hostname,
-        os: std::env::consts::OS,
-        arch: std::env::consts::ARCH,
-        lan_addresses,
-    })
 }

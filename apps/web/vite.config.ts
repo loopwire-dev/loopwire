@@ -14,12 +14,6 @@ export default defineConfig({
 			},
 		},
 	},
-	resolve: {
-		alias: {
-			"@loopwire/types": new URL("../../packages/types/src", import.meta.url)
-				.pathname,
-		},
-	},
 	test: {
 		environment: "node",
 		setupFiles: ["./src/test-setup.ts"],

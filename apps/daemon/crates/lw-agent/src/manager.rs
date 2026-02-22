@@ -54,7 +54,18 @@ pub struct AgentManager {
 impl AgentManager {
     pub fn new(pty_manager: Arc<PtyManager>, persisted_agents: Vec<PersistedAgentInfo>) -> Self {
         let runners = default_runners();
+        #[cfg(not(test))]
         let initial_available_agents = Self::collect_available_agents(&runners, None);
+        #[cfg(test)]
+        let initial_available_agents: Vec<AvailableAgent> = runners
+            .iter()
+            .map(|runner| AvailableAgent {
+                agent_type: runner.agent_type(),
+                name: runner.name().to_string(),
+                installed: false,
+                version: None,
+            })
+            .collect();
         let (activity_events_tx, _) = broadcast::channel(512);
         let recorder = ActivityRecorder::new(
             Arc::new(RwLock::new(HashMap::new())),

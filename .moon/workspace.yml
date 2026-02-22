@@ -1,7 +1,6 @@
 projects:
   - '.'
   - 'apps/*/moon.yml'
-  - 'packages/*/moon.yml'
 
 vcs:
   client: git

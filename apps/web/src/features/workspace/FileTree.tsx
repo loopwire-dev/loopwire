@@ -1,6 +1,6 @@
 import { ChevronsDownUp, ChevronsUpDown, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api } from "../../shared/lib/api";
+import { fsList, fsRead } from "../../shared/lib/daemon/rest";
 import { useAppStore } from "../../shared/stores/app-store";
 import { fetchGitDiffFiles } from "../editor/diffUtils";
 import { FileTreeNode, type TreeCommand } from "./FileTreeNode";
@@ -55,15 +55,8 @@ export function FileTree() {
 		async (path: string) => {
 			if (!workspaceId) return;
 			try {
-				const file = await api.get<{
-					content: string;
-					size: number;
-					is_binary: boolean;
-					binary_content_base64: string | null;
-				}>("/fs/read", {
-					workspace_id: workspaceId,
-					relative_path: path,
-					include_binary: "true",
+				const file = await fsRead(workspaceId, path, {
+					includeBinary: true,
 				});
 				const imageMimeType = getImageMimeType(path);
 
@@ -102,10 +95,7 @@ export function FileTree() {
 		async (path: string): Promise<DirEntry[]> => {
 			if (!workspaceId) return [];
 			try {
-				return await api.get<DirEntry[]>("/fs/list", {
-					workspace_id: workspaceId,
-					relative_path: path,
-				});
+				return await fsList(workspaceId, path);
 			} catch {
 				return [];
 			}

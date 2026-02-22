@@ -10,12 +10,18 @@ function splitDataUrl(url: string): { header: string; body: string } | null {
 	};
 }
 
+/**
+ * Type guard for `data:image/*` URLs used by workspace and session icons.
+ */
 export function isDataImageUrl(
 	value: string | null | undefined,
 ): value is string {
 	return typeof value === "string" && /^data:image\//i.test(value);
 }
 
+/**
+ * Returns whether mask metadata explicitly disables theme masking.
+ */
 export function isThemeMaskDisabled(icon: string | null | undefined): boolean {
 	if (!isDataImageUrl(icon)) return false;
 	const parts = splitDataUrl(icon);
@@ -23,6 +29,9 @@ export function isThemeMaskDisabled(icon: string | null | undefined): boolean {
 	return /;lw-mask=none(?:;|$)/i.test(parts.header);
 }
 
+/**
+ * Removes Loopwire mask metadata from a data-image URL.
+ */
 export function stripMaskMetadata(icon: string): string {
 	if (!isDataImageUrl(icon)) return icon;
 	const parts = splitDataUrl(icon);
@@ -31,6 +40,9 @@ export function stripMaskMetadata(icon: string): string {
 	return `${cleanedHeader},${parts.body}`;
 }
 
+/**
+ * Applies or removes Loopwire mask metadata on a data-image URL.
+ */
 export function withThemeMask(icon: string, enabled: boolean): string {
 	if (!isDataImageUrl(icon)) return icon;
 	const parts = splitDataUrl(icon);

@@ -1,14 +1,11 @@
 [
-  {"name":"needs-triage","color":"BFD4F2","description":"Needs initial triage"},
   {"name":"bug","color":"D73A4A","description":"Something is not working"},
-  {"name":"enhancement","color":"A2EEEF","description":"New feature or request"},
-  {"name":"documentation","color":"0075CA","description":"Documentation updates"},
-  {"name":"frontend","color":"1D76DB","description":"Changes in apps/web"},
-  {"name":"backend","color":"5319E7","description":"Changes in apps/daemon"},
-  {"name":"types","color":"0E8A16","description":"Changes in packages/types"},
   {"name":"ci","color":"FBCA04","description":"CI or workflow changes"},
-  {"name":"scripts","color":"C5DEF5","description":"Scripts and tooling changes"},
+  {"name":"daemon","color":"5319E7","description":"Changes in apps/daemon"},
+  {"name":"enhancement","color":"A2EEEF","description":"New feature or request"},
+  {"name":"needs-triage","color":"BFD4F2","description":"Needs initial triage"},
   {"name":"priority:high","color":"B60205","description":"High priority"},
   {"name":"priority:medium","color":"D93F0B","description":"Medium priority"},
-  {"name":"priority:low","color":"FBCA04","description":"Low priority"}
+  {"name":"priority:low","color":"FBCA04","description":"Low priority"},
+  {"name":"web","color":"1D76DB","description":"Changes in apps/web"}
 ]

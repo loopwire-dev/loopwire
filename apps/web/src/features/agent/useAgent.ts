@@ -1,5 +1,10 @@
 import { useCallback, useState } from "react";
-import { api } from "../../shared/lib/api";
+import {
+	renameAgentSession,
+	startAgentSession,
+	stopAgentSession,
+	updateAgentSessionSettings,
+} from "../../shared/lib/daemon/rest";
 import {
 	type AgentActivity,
 	type WorkspaceSession,
@@ -47,18 +52,7 @@ export function useAgent() {
 		async (agentType: string, workspacePath: string) => {
 			setLoading(true);
 			try {
-				const res = await api.post<{
-					session_id: string;
-					workspace_id: string;
-					agent_type: string;
-					custom_name?: string | null;
-					status: string;
-					created_at: string;
-					activity?: AgentActivity;
-				}>("/agents/sessions", {
-					agent_type: agentType,
-					workspace_path: workspacePath,
-				});
+				const res = await startAgentSession(agentType, workspacePath);
 
 				upsertWorkspaceSession({
 					sessionId: res.session_id,
@@ -90,7 +84,7 @@ export function useAgent() {
 
 	const stopSession = useCallback(
 		async (sessionId: string) => {
-			await api.post(`/agents/sessions/${sessionId}/stop`);
+			await stopAgentSession(sessionId);
 			removeWorkspaceSession(sessionId);
 		},
 		[removeWorkspaceSession],
@@ -98,9 +92,7 @@ export function useAgent() {
 
 	const renameSession = useCallback(
 		async (sessionId: string, customName: string | null) => {
-			await api.post(`/agents/sessions/${sessionId}/rename`, {
-				custom_name: customName,
-			});
+			await renameAgentSession(sessionId, customName);
 		},
 		[],
 	);
@@ -114,7 +106,7 @@ export function useAgent() {
 				sort_order?: number | null;
 			},
 		) => {
-			await api.post(`/agents/sessions/${sessionId}/settings`, settings);
+			await updateAgentSessionSettings(sessionId, settings);
 		},
 		[],
 	);

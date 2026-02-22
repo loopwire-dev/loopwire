@@ -1,6 +1,10 @@
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../../shared/lib/api";
+import {
+	authExchange,
+	authRevoke,
+	authRotate,
+} from "../../shared/lib/daemon/rest";
 import { useAppStore } from "../../shared/stores/app-store";
 
 export function useAuth() {
@@ -30,10 +34,7 @@ export function useAuth() {
 			window.history.replaceState({}, "", url.pathname + url.search);
 
 			// Exchange bootstrap token for session token
-			api
-				.post<{ session_token: string }>("/auth/exchange", {
-					bootstrap_token: bootstrapToken,
-				})
+			authExchange(bootstrapToken)
 				.then((res) => {
 					setToken(res.session_token);
 				})
@@ -55,7 +56,7 @@ export function useAuth() {
 		isAuthenticated: !!token,
 		logout: async () => {
 			try {
-				await api.post("/auth/revoke");
+				await authRevoke();
 			} catch {
 				// Best effort
 			}
@@ -63,7 +64,7 @@ export function useAuth() {
 			navigate("/auth");
 		},
 		rotate: async () => {
-			const res = await api.post<{ session_token: string }>("/auth/rotate");
+			const res = await authRotate();
 			setToken(res.session_token);
 		},
 	};

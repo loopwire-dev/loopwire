@@ -4,16 +4,23 @@
   <img src="brand-assets/social/og-image-1200x630.png" alt="Loopwire cover" width="760" />
 </p>
 
-[![Docs Coverage](https://github.com/loopwire-dev/loopwire/actions/workflows/docs-coverage.yml/badge.svg)](https://github.com/loopwire-dev/loopwire/actions/workflows/docs-coverage.yml)
-[![Tests Coverage](https://codecov.io/gh/loopwire-dev/loopwire/branch/main/graph/badge.svg)](https://codecov.io/gh/loopwire-dev/loopwire)
-[![Web Deploy](https://github.com/loopwire-dev/loopwire/actions/workflows/deploy.yml/badge.svg)](https://github.com/loopwire-dev/loopwire/actions/workflows/deploy.yml)
-[![Daemon Release](https://github.com/loopwire-dev/loopwire/actions/workflows/release.yml/badge.svg)](https://github.com/loopwire-dev/loopwire/actions/workflows/release.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+<p align="center">
+  <a href="https://qlty.sh/gh/loopwire-dev/projects/loopwire">
+    <img src="https://qlty.sh/gh/loopwire-dev/projects/loopwire/coverage.svg" alt="Tests Coverage" />
+  </a>
+  <a href="https://github.com/loopwire-dev/loopwire/actions/workflows/ci.yml">
+    <img src="https://github.com/loopwire-dev/loopwire/actions/workflows/ci.yml/badge.svg" alt="CI" />
+  </a>
+  <a href="https://github.com/loopwire-dev/loopwire/actions/workflows/ship.yml">
+    <img src="https://github.com/loopwire-dev/loopwire/actions/workflows/ship.yml/badge.svg" alt="Ship" />
+  </a>
+  <a href="LICENSE">
+    <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License: MIT" />
+  </a>
+</p>
 
 Loopwire is a desktop-like platform that helps you run, observe, and steer coding agents from one place.
 Instead of juggling terminals, editor tabs, and agent sessions manually, Loopwire gives you a single workflow to keep work organized and under control.
-
-Official website: https://loopwire.dev
 
 ## What Is Loopwire?
 
@@ -67,111 +74,44 @@ Use **Scan for machine** to discover your local Loopwire daemon.
 
 ## Development
 
-This section is for contributors working from this repository.
+### 1. Install moon
 
-### Prerequisites
+https://moonrepo.dev/
 
-- Rust `1.84+`
-- Bun `1.1+`
-- `cargo-llvm-cov` (for backend coverage): `cargo install cargo-llvm-cov --locked`
-- moon (optional): https://moonrepo.dev/
-
-### Bootstrap
-
-From repo root:
+### List available tasks
 
 ```bash
-bun install
+moon tasks
 ```
 
-### Run in development
+### 2. Bootstrap the repo
 
-Terminal 1 (daemon):
+From the repo root:
 
 ```bash
-cd apps/daemon
-cargo run -- start
+moon run root:setup
 ```
 
-Terminal 2 (web):
+If bootstrap cannot install tools automatically in your environment, install the missing tools manually and run `moon run root:setup` again.
+
+### 3. Start development
+
+Run these in two terminals:
 
 ```bash
-cd apps/web
-bun run dev
+moon run daemon:dev
 ```
 
-### Build
-
 ```bash
-# backend
-cd apps/daemon && cargo build --workspace
-
-# frontend
-cd apps/web && bun run build
+moon run web:dev
 ```
 
-### Quality checks
+### 4. Run checks before pushing
 
 ```bash
-# backend
-cd apps/daemon
-cargo check --workspace
-cargo clippy --workspace -- -D warnings
-cargo fmt --all -- --check
-cargo test --workspace
-cargo llvm-cov --workspace --lcov --output-path lcov.info --fail-under-lines 1
-
-# frontend
-cd apps/web
-bun run format:check
-bun run typecheck
-bun run lint
-bun run test
-bun run coverage
-bun run quality
-```
-
-### Optional moon commands (repo root)
-
-```bash
-moon run daemon:build
-moon run web:build
-moon run web:quality
-moon run web:coverage
 moon run daemon:quality
-moon run daemon:coverage
-moon run root:git-add
-moon run :lint
-moon run :test
+moon run web:quality
 ```
-
-### Pre-commit hooks (prek)
-
-Install `prek` and enable project hooks:
-
-```bash
-prek install --hook-type pre-commit --hook-type pre-push
-```
-
-Run the full hook suite manually:
-
-```bash
-prek run --all-files
-prek run --hook-stage pre-push --all-files
-```
-
-The hook config lives at `.pre-commit-config.yaml` and includes formatting, linting, type checks, Rust checks, and pre-push tests.
-Formatting hooks run in auto-fix mode before checks (`Biome format` and `cargo fmt`).
-
-### Git shortcuts (format before add)
-
-Use these moon tasks to format then stage changes:
-
-```bash
-moon run root:git-add
-```
-
-The task composes existing moon tasks (`types:generate`, `web:format`, `daemon:format`) and then stages the entire repository (`git add -A .`).
 
 ## Contributing
 

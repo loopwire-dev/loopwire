@@ -3,22 +3,64 @@ id: root
 fileGroups:
   sources:
     - 'apps/**/*'
-    - 'packages/**/*'
     - 'scripts/**/*'
     - '.github/**/*'
     - 'README.md'
   configs:
     - 'moon.yml'
     - '.moon/**/*'
-    - 'package.json'
 
 tasks:
+  install-prek:
+    command: >-
+      bash -lc 'if command -v prek >/dev/null 2>&1; then
+      echo "prek already installed.";
+      else
+      cargo install --locked prek || echo "Skipping prek install. Install manually, then run: prek install --hook-type pre-commit --hook-type pre-push";
+      fi'
+    options:
+      runInCI: false
+
+  install-qlty:
+    command: >-
+      bash -lc 'if command -v qlty >/dev/null 2>&1 || [ -x "$HOME/.qlty/bin/qlty" ]; then
+      echo "qlty already installed.";
+      else
+      curl -fsSL --connect-timeout 5 --max-time 20 https://qlty.sh | sh || echo "Skipping qlty install. Install manually from https://docs.qlty.sh/cli/quickstart";
+      fi'
+    options:
+      runInCI: false
+
+  install-hooks:
+    command: >-
+      bash -lc 'if command -v prek >/dev/null 2>&1; then
+      prek install --hook-type pre-commit --hook-type pre-push;
+      else
+      echo "prek not found. Install it first, then run: prek install --hook-type pre-commit --hook-type pre-push";
+      fi'
+    deps:
+      - 'install-prek'
+      - 'install-qlty'
+      - 'web:setup'
+    options:
+      envFile: '/.env'
+      runInCI: false
+
+  setup:
+    command: 'echo "root setup complete"'
+    deps:
+      - 'install-qlty'
+      - 'web:setup'
+      - 'daemon:setup'
+      - 'install-hooks'
+    options:
+      runInCI: false
+
   prepare-git-add:
     command: 'echo "prepare complete"'
     deps:
-      - 'types:generate'
-      - 'web:format'
-      - 'daemon:format'
+      - 'web:format-fix'
+      - 'daemon:format-fix'
 
   git-add:
     command: 'git add -A .'

@@ -102,7 +102,7 @@ impl DaemonConfig {
             anyhow::bail!("port must not be 0");
         }
         if self.frontend_url.is_empty() {
-            anyhow::bail!("frontend_url must not be empty");
+            anyhow::bail!("frontend_url must not be empty (set LOOPWIRE_FRONTEND_URL)");
         }
         if self.remote.invite_ttl_seconds == 0 {
             anyhow::bail!("remote.invite_ttl_seconds must be greater than 0");
@@ -111,7 +111,9 @@ impl DaemonConfig {
             anyhow::bail!("remote.provider_order must not be empty");
         }
         if self.remote.frontend_connect_url.is_empty() {
-            anyhow::bail!("remote.frontend_connect_url must not be empty");
+            anyhow::bail!(
+                "remote.frontend_connect_url must not be empty (set LOOPWIRE_FRONTEND_URL)"
+            );
         }
         Ok(())
     }
@@ -136,24 +138,30 @@ mod tests {
         let config = DaemonConfig::default();
         assert_eq!(config.host, IpAddr::V4(Ipv4Addr::UNSPECIFIED));
         assert_eq!(config.port, 9400);
-        assert_eq!(config.frontend_url, "http://loopwire.dev");
+        assert_eq!(config.frontend_url, default_frontend_url());
         assert!(config.lan.enabled);
     }
 
     #[test]
     fn bind_addr_formats_correctly() {
-        let mut config = DaemonConfig::default();
-        config.port = 8080;
-        config.host = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+        let config = DaemonConfig {
+            port: 8080,
+            host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+            ..DaemonConfig::default()
+        };
         assert_eq!(config.bind_addr(), "127.0.0.1:8080");
     }
 
     #[test]
-    fn load_with_no_file_returns_default() {
+    fn load_with_no_file_requires_frontend_url() {
         let paths = test_paths();
         paths.ensure_config_dir().unwrap();
-        let config = DaemonConfig::load_from(&paths).unwrap();
-        assert_eq!(config.port, 9400);
+        if default_frontend_url().is_empty() {
+            assert!(DaemonConfig::load_from(&paths).is_err());
+        } else {
+            let config = DaemonConfig::load_from(&paths).unwrap();
+            assert_eq!(config.frontend_url, default_frontend_url());
+        }
     }
 
     #[test]
@@ -162,7 +170,7 @@ mod tests {
         paths.ensure_config_dir().unwrap();
         std::fs::write(
             paths.config_path(),
-            "port = 8888\nfrontend_url = \"http://example.com\"\n",
+            "port = 8888\nfrontend_url = \"http://example.com\"\n[remote]\nfrontend_connect_url = \"http://example.com/connect\"\n",
         )
         .unwrap();
         let config = DaemonConfig::load_from(&paths).unwrap();
@@ -171,14 +179,17 @@ mod tests {
     }
 
     #[test]
-    fn load_with_partial_toml_fills_defaults() {
+    fn load_with_partial_toml_requires_frontend_url() {
         let paths = test_paths();
         paths.ensure_config_dir().unwrap();
         std::fs::write(paths.config_path(), "port = 7777\n").unwrap();
-        let config = DaemonConfig::load_from(&paths).unwrap();
-        assert_eq!(config.port, 7777);
-        // frontend_url should be the default
-        assert_eq!(config.frontend_url, "http://loopwire.dev");
+        if default_frontend_url().is_empty() {
+            assert!(DaemonConfig::load_from(&paths).is_err());
+        } else {
+            let config = DaemonConfig::load_from(&paths).unwrap();
+            assert_eq!(config.port, 7777);
+            assert_eq!(config.frontend_url, default_frontend_url());
+        }
     }
 
     #[test]
@@ -191,15 +202,19 @@ mod tests {
 
     #[test]
     fn validate_rejects_port_zero() {
-        let mut config = DaemonConfig::default();
-        config.port = 0;
+        let config = DaemonConfig {
+            port: 0,
+            ..DaemonConfig::default()
+        };
         assert!(config.validate().is_err());
     }
 
     #[test]
     fn validate_rejects_empty_frontend_url() {
-        let mut config = DaemonConfig::default();
-        config.frontend_url = String::new();
+        let config = DaemonConfig {
+            frontend_url: String::new(),
+            ..DaemonConfig::default()
+        };
         assert!(config.validate().is_err());
     }
 

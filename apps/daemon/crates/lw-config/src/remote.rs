@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::env;
 
-const DEFAULT_FRONTEND_URL: &str = "http://loopwire.dev";
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RemoteConfig {
     #[serde(default)]
@@ -30,12 +28,16 @@ fn default_auto_install_helpers() -> bool {
 }
 
 pub(crate) fn default_frontend_url() -> String {
-    env::var("LOOPWIRE_FRONTEND_URL").unwrap_or_else(|_| DEFAULT_FRONTEND_URL.to_string())
+    env::var("LOOPWIRE_FRONTEND_URL").unwrap_or_default()
 }
 
 fn default_frontend_connect_url() -> String {
     let base = default_frontend_url();
-    format!("{}/connect", base.trim_end_matches('/'))
+    if base.is_empty() {
+        String::new()
+    } else {
+        format!("{}/connect", base.trim_end_matches('/'))
+    }
 }
 
 impl Default for RemoteConfig {
@@ -66,9 +68,12 @@ mod tests {
     #[test]
     fn frontend_connect_url_derives_from_frontend_url() {
         let r = RemoteConfig::default();
-        // Default frontend_url is http://loopwire.dev
-        assert!(r.frontend_connect_url.contains("/connect"));
-        assert!(r.frontend_connect_url.starts_with("http"));
+        if default_frontend_url().is_empty() {
+            assert!(r.frontend_connect_url.is_empty());
+        } else {
+            assert!(r.frontend_connect_url.contains("/connect"));
+            assert!(r.frontend_connect_url.starts_with("http"));
+        }
     }
 
     #[test]

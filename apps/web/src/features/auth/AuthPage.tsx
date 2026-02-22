@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../../shared/lib/api";
+import { authExchange } from "../../shared/lib/daemon/rest";
 import { useAppStore } from "../../shared/stores/app-store";
 import { Button } from "../../shared/ui/Button";
 
@@ -17,9 +17,7 @@ export function AuthPage() {
 		setLoading(true);
 
 		try {
-			const res = await api.post<{ session_token: string }>("/auth/exchange", {
-				bootstrap_token: bootstrapToken,
-			});
+			const res = await authExchange(bootstrapToken);
 			setToken(res.session_token);
 			navigate("/");
 		} catch (err) {

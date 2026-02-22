@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { api } from "../../shared/lib/api";
+import { sessionScrollback } from "../../shared/lib/daemon/rest";
 
 interface ScrollbackData {
 	data: string; // base64-encoded raw PTY bytes
@@ -37,10 +37,9 @@ export function useScrollback(): UseScrollbackReturn {
 		setHasMore(false);
 
 		try {
-			const data = await api.get<ScrollbackData>(
-				`/agents/sessions/${sessionId}/scrollback`,
-				{ max_bytes: "524288" },
-			);
+			const data = await sessionScrollback(sessionId, {
+				maxBytes: 524288,
+			});
 			setPages([data]);
 			setHasMore(data.has_more);
 		} catch (err) {
@@ -65,13 +64,10 @@ export function useScrollback(): UseScrollbackReturn {
 		loadingRef.current = true;
 		setLoading(true);
 		try {
-			const data = await api.get<ScrollbackData>(
-				`/agents/sessions/${sessionId}/scrollback`,
-				{
-					before_offset: String(firstPage.start_offset),
-					max_bytes: "524288",
-				},
-			);
+			const data = await sessionScrollback(sessionId, {
+				beforeOffset: firstPage.start_offset,
+				maxBytes: 524288,
+			});
 			const isDuplicate = pages.some(
 				(page) =>
 					page.start_offset === data.start_offset &&

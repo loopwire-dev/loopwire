@@ -6,6 +6,20 @@ INSTALL_DIR="${HOME}/.loopwire/bin"
 AUTOSTART_NAME="loopwired"
 AUTOUPDATE_NAME="loopwired-autoupdate"
 
+sha256_file() {
+  local file="$1"
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$file" | awk '{print $1}'
+  elif command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$file" | awk '{print $1}'
+  elif command -v openssl >/dev/null 2>&1; then
+    openssl dgst -sha256 "$file" | awk '{print $NF}'
+  else
+    echo "No SHA-256 tool found (tried shasum, sha256sum, openssl)." >&2
+    exit 1
+  fi
+}
+
 # Detect OS and architecture
 detect_platform() {
   local os arch
@@ -13,7 +27,6 @@ detect_platform() {
   case "$(uname -s)" in
     Linux*)  os="linux" ;;
     Darwin*) os="darwin" ;;
-    MINGW*|MSYS*|CYGWIN*) os="windows" ;;
     *) echo "Unsupported OS: $(uname -s)" && exit 1 ;;
   esac
 
@@ -132,13 +145,26 @@ INSTALL_DIR="${HOME}/.loopwire/bin"
 BINARY_NAME="${LOOPWIRE_BINARY_NAME:-loopwired}"
 PLATFORM=""
 
+sha256_file() {
+  local file="$1"
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$file" | awk '{print $1}'
+  elif command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$file" | awk '{print $1}'
+  elif command -v openssl >/dev/null 2>&1; then
+    openssl dgst -sha256 "$file" | awk '{print $NF}'
+  else
+    echo "No SHA-256 tool found (tried shasum, sha256sum, openssl)." >&2
+    exit 1
+  fi
+}
+
 detect_platform() {
   local os arch
 
   case "$(uname -s)" in
     Linux*)  os="linux" ;;
     Darwin*) os="darwin" ;;
-    MINGW*|MSYS*|CYGWIN*) os="windows" ;;
     *) echo "Unsupported OS: $(uname -s)"; exit 0 ;;
   esac
 
@@ -182,11 +208,11 @@ curl -fsSL "${DOWNLOAD_URL}" -o "${TMP_PATH}"
 
 CHECKSUMS="$(curl -fsSL "${CHECKSUM_URL}")"
 EXPECTED="$(echo "${CHECKSUMS}" | grep "loopwired-${PLATFORM}" | awk '{print $1}')"
-ACTUAL_TMP="$(shasum -a 256 "${TMP_PATH}" | awk '{print $1}')"
+ACTUAL_TMP="$(sha256_file "${TMP_PATH}")"
 [ "${EXPECTED}" = "${ACTUAL_TMP}" ] || { rm -f "${TMP_PATH}"; exit 1; }
 
 if [ -f "${INSTALLED_PATH}" ]; then
-  ACTUAL_INSTALLED="$(shasum -a 256 "${INSTALLED_PATH}" | awk '{print $1}')"
+  ACTUAL_INSTALLED="$(sha256_file "${INSTALLED_PATH}")"
   if [ "${ACTUAL_INSTALLED}" = "${ACTUAL_TMP}" ]; then
     rm -f "${TMP_PATH}"
     exit 0
@@ -300,9 +326,6 @@ echo "Latest release: $LATEST_TAG"
 
 # Download binary
 BINARY_NAME="loopwired"
-if [ "$PLATFORM" = "windows-amd64" ]; then
-  BINARY_NAME="loopwired.exe"
-fi
 
 DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${LATEST_TAG}/loopwired-${PLATFORM}"
 CHECKSUM_URL="https://github.com/${REPO}/releases/download/${LATEST_TAG}/checksums.sha256"
@@ -315,7 +338,7 @@ curl -sL "$DOWNLOAD_URL" -o "${INSTALL_DIR}/${BINARY_NAME}"
 echo "Verifying checksum..."
 CHECKSUMS=$(curl -sL "$CHECKSUM_URL")
 EXPECTED=$(echo "$CHECKSUMS" | grep "loopwired-${PLATFORM}" | awk '{print $1}')
-ACTUAL=$(shasum -a 256 "${INSTALL_DIR}/${BINARY_NAME}" | awk '{print $1}')
+ACTUAL=$(sha256_file "${INSTALL_DIR}/${BINARY_NAME}")
 
 if [ "$EXPECTED" != "$ACTUAL" ]; then
   echo "Checksum verification FAILED!"
@@ -333,36 +356,39 @@ echo ""
 echo "Installed loopwired to ${INSTALL_DIR}/${BINARY_NAME}"
 echo ""
 
-# Ensure install dir is on PATH for this session
-export PATH="${INSTALL_DIR}:$PATH"
-
 # Add to shell profile if not already there
-if ! echo "$PATH" | tr ':' '\n' | grep -q "${INSTALL_DIR}"; then
-  SHELL_PROFILE=""
-  case "${SHELL:-}" in
-    */zsh)  SHELL_PROFILE="$HOME/.zshrc" ;;
-    */bash)
-      if [ -f "$HOME/.bash_profile" ]; then
-        SHELL_PROFILE="$HOME/.bash_profile"
-      else
-        SHELL_PROFILE="$HOME/.bashrc"
-      fi
-      ;;
-    */fish) SHELL_PROFILE="$HOME/.config/fish/config.fish" ;;
-  esac
+SHELL_PROFILE=""
+case "${SHELL:-}" in
+  */zsh)  SHELL_PROFILE="$HOME/.zshrc" ;;
+  */bash)
+    if [ -f "$HOME/.bash_profile" ]; then
+      SHELL_PROFILE="$HOME/.bash_profile"
+    else
+      SHELL_PROFILE="$HOME/.bashrc"
+    fi
+    ;;
+  */fish) SHELL_PROFILE="$HOME/.config/fish/config.fish" ;;
+esac
 
-  if [ -n "$SHELL_PROFILE" ]; then
+if [ -n "$SHELL_PROFILE" ]; then
+  if ! grep -qF "${INSTALL_DIR}" "$SHELL_PROFILE" 2>/dev/null; then
     echo "" >> "$SHELL_PROFILE"
     echo "# Loopwire" >> "$SHELL_PROFILE"
-    echo "export PATH=\"${INSTALL_DIR}:\$PATH\"" >> "$SHELL_PROFILE"
+    case "${SHELL:-}" in
+      */fish) echo "fish_add_path -m \"${INSTALL_DIR}\"" >> "$SHELL_PROFILE" ;;
+      *) echo "export PATH=\"${INSTALL_DIR}:\$PATH\"" >> "$SHELL_PROFILE" ;;
+    esac
     echo "Added ${INSTALL_DIR} to PATH in ${SHELL_PROFILE}"
-  else
-    echo "Add the following to your shell profile:"
-    echo ""
-    echo "  export PATH=\"${INSTALL_DIR}:\$PATH\""
-    echo ""
   fi
+else
+  echo "Add the following to your shell profile:"
+  echo ""
+  echo "  export PATH=\"${INSTALL_DIR}:\$PATH\""
+  echo ""
 fi
+
+# Ensure install dir is on PATH for this session
+export PATH="${INSTALL_DIR}:$PATH"
 
 FULL_BINARY_PATH="${INSTALL_DIR}/${BINARY_NAME}"
 UPDATER_PATH="${INSTALL_DIR}/loopwire-autoupdate"

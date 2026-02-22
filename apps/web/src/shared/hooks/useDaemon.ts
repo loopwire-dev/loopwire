@@ -1,39 +1,12 @@
 import { useEffect, useRef } from "react";
-import { api } from "../lib/api";
-import { wsClient } from "../lib/ws";
+import { bootstrap } from "../lib/daemon/rest";
 import {
-	type AgentActivity,
-	type AvailableAgent,
-	defaultAgentActivity,
-	useAppStore,
-} from "../stores/app-store";
-
-interface AgentSessionResponse {
-	session_id: string;
-	agent_type: string;
-	custom_name?: string | null;
-	pinned?: boolean;
-	icon?: string | null;
-	sort_order?: number | null;
-	status: string;
-	resume_failure_reason?: string | null;
-	created_at: string;
-	activity?: AgentActivity;
-}
-
-interface BootstrapWorkspaceEntry {
-	id: string;
-	path: string;
-	name: string;
-	pinned: boolean;
-	icon: string | null;
-	sessions: AgentSessionResponse[];
-}
-
-interface BootstrapResponse {
-	workspaces: BootstrapWorkspaceEntry[];
-	available_agents: AvailableAgent[];
-}
+	daemonWsConnect,
+	daemonWsDisconnect,
+	onAgentActivityEvent,
+	onDaemonWsReconnect,
+} from "../lib/daemon/ws";
+import { defaultAgentActivity, useAppStore } from "../stores/app-store";
 
 export function useDaemon() {
 	const token = useAppStore((s) => s.token);
@@ -48,7 +21,7 @@ export function useDaemon() {
 	const hydrateFromDaemon = useRef<(() => Promise<void>) | null>(null);
 
 	hydrateFromDaemon.current = async () => {
-		const data = await api.get<BootstrapResponse>("/bootstrap");
+		const data = await bootstrap();
 
 		mergeBackendWorkspaces(data.workspaces);
 		setAvailableAgents(data.available_agents);
@@ -82,7 +55,7 @@ export function useDaemon() {
 	};
 
 	useEffect(() => {
-		const unsubReconnect = wsClient.onReconnect(() => {
+		const unsubReconnect = onDaemonWsReconnect(() => {
 			void hydrateFromDaemon.current?.().catch(() => {
 				// Best effort hydration after reconnect
 			});
@@ -98,21 +71,21 @@ export function useDaemon() {
 			connectedTokenRef.current = token;
 			// hydrateFromDaemon is called via the onReconnect callback (which
 			// also fires on the initial connection), so no need to call it here.
-			wsClient.connect();
+			daemonWsConnect();
 		} else if (!token && connectedTokenRef.current) {
 			connectedTokenRef.current = null;
-			wsClient.disconnect();
+			daemonWsDisconnect();
 		}
 		// No cleanup — we manage the lifecycle via the ref
 	}, [token]);
 
 	useEffect(() => {
-		const unsubActivity = wsClient.on("agent:activity", (env) => {
-			const rawSessionId = env.payload.session_id;
+		const unsubActivity = onAgentActivityEvent((payload) => {
+			const rawSessionId = payload.session_id;
 			if (typeof rawSessionId !== "string") return;
-			const rawActivity = env.payload.activity;
+			const rawActivity = payload.activity;
 			if (!rawActivity || typeof rawActivity !== "object") return;
-			const record = rawActivity as Record<string, unknown>;
+			const record = rawActivity as unknown as Record<string, unknown>;
 			const phase = record.phase;
 			const updatedAt = record.updated_at;
 			if (

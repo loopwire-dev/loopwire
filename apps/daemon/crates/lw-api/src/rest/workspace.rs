@@ -617,7 +617,7 @@ mod tests {
             icon: Some("AA".to_string()),
         };
 
-        save_workspaces(&paths, &[entry.clone()]).unwrap();
+        save_workspaces(&paths, std::slice::from_ref(&entry)).unwrap();
 
         let persisted = config
             .join("workspaces")
@@ -652,7 +652,7 @@ mod tests {
             pinned: false,
             icon: None,
         };
-        save_workspaces(&paths, &[entry.clone()]).unwrap();
+        save_workspaces(&paths, std::slice::from_ref(&entry)).unwrap();
 
         let a = Uuid::new_v4();
         let b = Uuid::new_v4();
@@ -722,7 +722,7 @@ mod tests {
         );
 
         // Saving workspace metadata should preserve workspace-local agent data.
-        save_workspaces(&paths, &[entry.clone()]).unwrap();
+        save_workspaces(&paths, std::slice::from_ref(&entry)).unwrap();
         let loaded_after_workspace_save = load_workspace_agents(&paths, workspace.as_path());
         assert_eq!(
             loaded_after_workspace_save

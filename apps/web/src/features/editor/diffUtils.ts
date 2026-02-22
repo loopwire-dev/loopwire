@@ -1,4 +1,4 @@
-import { api } from "../../shared/lib/api";
+import { gitDiff } from "../../shared/lib/daemon/rest";
 
 export type DiffLineType = "context" | "addition" | "deletion";
 
@@ -67,11 +67,7 @@ export async function fetchGitDiffFiles(
 		if (inFlight) return inFlight;
 	}
 
-	const promise = api
-		.get<GitDiffResponse>("/git/diff", {
-			workspace_id: workspaceId,
-			...(force ? { force: "true" } : {}),
-		})
+	const promise = gitDiff(workspaceId, force)
 		.then((response) => {
 			const files = parseUnifiedPatch(response.patch);
 			gitDiffClientCache.set(workspaceId, {

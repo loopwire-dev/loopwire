@@ -1,4 +1,4 @@
-import { api } from "../../shared/lib/api";
+import { registerWorkspace } from "../../shared/lib/daemon/rest";
 import { useAppStore } from "../../shared/stores/app-store";
 import { FolderBrowser } from "./FolderBrowser";
 
@@ -14,10 +14,7 @@ export function NewWorkspaceView() {
 		setWorkspacePath(path);
 		setBrowsingForWorkspace(false);
 		try {
-			const res = await api.post<{ workspace_id: string }>(
-				"/workspaces/register",
-				{ path },
-			);
+			const res = await registerWorkspace(path);
 			setWorkspace(path, res.workspace_id);
 		} catch {
 			// Workspace will work without ID, just no file tree

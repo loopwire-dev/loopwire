@@ -7,7 +7,7 @@ import {
 	Search,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ApiError, api } from "../../shared/lib/api";
+import { fsReadMany, isNotGitRepoError } from "../../shared/lib/daemon/rest";
 import { useAppStore } from "../../shared/stores/app-store";
 import {
 	type DiffFile,
@@ -55,17 +55,6 @@ const SPLIT_VIRTUALIZE_THRESHOLD = 80;
 interface CachedUnifiedFile {
 	content: string | null;
 	expiresAt: number;
-}
-
-interface ReadManyResponse {
-	files: Record<
-		string,
-		{
-			content: string;
-			size: number;
-			is_binary: boolean;
-		}
-	>;
 }
 
 interface UnifiedLinesCacheEntry {
@@ -125,11 +114,7 @@ async function fetchUnifiedFilesBatch(
 	}
 
 	if (toFetch.length > 0) {
-		const batchPromise = api
-			.post<ReadManyResponse>("/fs/read_many", {
-				workspace_id: workspaceId,
-				relative_paths: toFetch,
-			})
+		const batchPromise = fsReadMany(workspaceId, toFetch)
 			.then((response) => {
 				const files = response.files ?? {};
 				const loaded: Record<string, string | null> = {};
@@ -672,12 +657,10 @@ export function GitPanelView() {
 				setFiles(parseUnifiedPatch(response.patch));
 				setUpdatedAt(new Date().toLocaleTimeString());
 			} catch (err) {
-				if (err instanceof ApiError) {
-					if (err.code === "NOT_GIT_REPO") {
-						setError("This workspace is not a Git repository.");
-					} else {
-						setError(err.message);
-					}
+				if (isNotGitRepoError(err)) {
+					setError("This workspace is not a Git repository.");
+				} else if (err instanceof Error) {
+					setError(err.message);
 				} else {
 					setError("Failed to load Git diff.");
 				}

@@ -15,10 +15,7 @@
 		"noUnusedLocals": true,
 		"noUnusedParameters": true,
 		"noFallthroughCasesInSwitch": true,
-		"noUncheckedIndexedAccess": true,
-		"paths": {
-			"@loopwire/types": ["../../packages/types/src"]
-		}
+		"noUncheckedIndexedAccess": true
 	},
 	"include": ["src"]
 }

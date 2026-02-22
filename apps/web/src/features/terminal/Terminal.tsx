@@ -1,7 +1,7 @@
 import { AlertTriangle } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api } from "../../shared/lib/api";
+import { attachToSession } from "../../shared/lib/daemon/rest";
 import { useAppStore } from "../../shared/stores/app-store";
 import { LoopwireSpinner } from "../../shared/ui/LoopwireSpinner";
 import { ScrollbackOverlay } from "./ScrollbackOverlay";
@@ -52,10 +52,7 @@ export function Terminal({ sessionId }: TerminalProps) {
 			const base64 = dataUrl.split(",")[1];
 			if (!base64) return;
 
-			const result = await api.post<{ path: string }>(
-				`/agents/sessions/${sessionId}/attach`,
-				{ data: base64, filename: file.name },
-			);
+			const result = await attachToSession(sessionId, base64, file.name);
 
 			sendInput(result.path);
 		},

@@ -90,6 +90,9 @@ function readBackendParam(): string | null {
 	}
 }
 
+/**
+ * Attempts to auto-discover a local daemon when no explicit URL override exists.
+ */
 export async function initDaemonDiscovery(): Promise<void> {
 	if (!isManualDiscoveryEnabled()) {
 		return;
@@ -111,14 +114,23 @@ export async function initDaemonDiscovery(): Promise<void> {
 	}
 }
 
+/**
+ * Returns whether manual daemon discovery is enabled for this browser session.
+ */
 export function isManualDiscoveryEnabled(): boolean {
 	return sessionStorage.getItem(DISCOVERY_ENABLED_KEY) === "1";
 }
 
+/**
+ * Enables daemon discovery for the current browser session.
+ */
 export function enableManualDiscovery(): void {
 	sessionStorage.setItem(DISCOVERY_ENABLED_KEY, "1");
 }
 
+/**
+ * Resolves the daemon base URL from query/session/env/discovery sources.
+ */
 export function getDaemonUrl(): string {
 	const fromQuery = readBackendParam();
 	if (fromQuery) {
@@ -154,10 +166,16 @@ export function getDaemonUrl(): string {
 	return "";
 }
 
+/**
+ * Returns the REST API base URL for daemon HTTP endpoints.
+ */
 export function getApiBase(): string {
 	return `${getDaemonUrl()}/api/v1`;
 }
 
+/**
+ * Returns the WebSocket base URL derived from daemon location.
+ */
 export function getWsBase(): string {
 	const daemonUrl = getDaemonUrl();
 	if (daemonUrl) {
@@ -172,6 +190,9 @@ export function getWsBase(): string {
 	return `${wsProtocol}//${window.location.host}`;
 }
 
+/**
+ * Returns the full WebSocket endpoint URL for realtime daemon events.
+ */
 export function getWsUrl(): string {
 	return `${getWsBase()}/api/v1/ws`;
 }

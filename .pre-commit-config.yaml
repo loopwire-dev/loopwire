@@ -1,7 +1,7 @@
 minimum_pre_commit_version: "3.0.0"
 default_stages: [pre-commit]
 default_install_hook_types: [pre-commit, pre-push]
-exclude: ^(apps/web/(coverage|dist|node_modules)/|apps/daemon/target/|packages/types/node_modules/|apps/web/tsconfig\.tsbuildinfo$)
+exclude: ^(apps/web/(coverage|dist|node_modules)/|apps/daemon/target/|apps/web/tsconfig\.tsbuildinfo$)
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -17,81 +17,102 @@ repos:
 
   - repo: local
     hooks:
-      - id: web-format-write
-        name: web format (Biome auto-fix)
-        entry: bash -lc 'cd apps/web && bun run format'
+      - id: daemon-check
+        name: daemon check
+        entry: bash -lc 'moon run daemon:check'
+        language: system
+        pass_filenames: false
+        files: ^apps/daemon/
+
+      - id: daemon-complexity
+        name: daemon complexity
+        entry: bash -lc 'moon run daemon:complexity'
+        language: system
+        pass_filenames: false
+        files: ^apps/daemon/
+
+      - id: daemon-docs
+        name: daemon docs check
+        entry: bash -lc 'moon run daemon:docs'
+        language: system
+        pass_filenames: false
+        files: ^apps/daemon/
+
+      - id: daemon-format-check
+        name: daemon format check
+        entry: bash -lc 'moon run daemon:format-check'
+        language: system
+        pass_filenames: false
+        files: ^apps/daemon/
+
+      - id: daemon-format-fix
+        name: daemon format fix
+        entry: bash -lc 'moon run daemon:format-fix'
+        language: system
+        pass_filenames: false
+        files: ^apps/daemon/
+
+      - id: daemon-lint
+        name: daemon lint
+        entry: bash -lc 'moon run daemon:lint'
+        language: system
+        pass_filenames: false
+        files: ^apps/daemon/
+
+      - id: daemon-tests
+        name: daemon tests
+        entry: bash -lc 'moon run daemon:test'
+        language: system
+        pass_filenames: false
+        files: ^apps/daemon/
+        stages: [pre-push]
+
+      - id: web-check
+        name: web check
+        entry: bash -lc 'moon run web:check'
+        language: system
+        pass_filenames: false
+        files: ^apps/web/
+
+      - id: web-complexity
+        name: web complexity
+        entry: bash -lc 'moon run web:complexity'
+        language: system
+        pass_filenames: false
+        files: ^apps/web/
+
+      - id: web-docs
+        name: web docs check
+        entry: bash -lc 'moon run web:docs'
         language: system
         pass_filenames: false
         files: ^apps/web/
 
       - id: web-format-check
-        name: web format check (Biome)
-        entry: bash -lc 'cd apps/web && bun run format:check'
+        name: web format check
+        entry: bash -lc 'moon run web:format-check'
+        language: system
+        pass_filenames: false
+        files: ^apps/web/
+
+      - id: web-format-fix
+        name: web format fix
+        entry: bash -lc 'moon run web:format-fix'
         language: system
         pass_filenames: false
         files: ^apps/web/
 
       - id: web-lint
-        name: web lint (Biome)
-        entry: bash -lc 'cd apps/web && bun run lint'
+        name: web lint
+        entry: bash -lc 'moon run web:lint'
         language: system
         pass_filenames: false
         files: ^apps/web/
-
-      - id: web-typecheck
-        name: web typecheck
-        entry: bash -lc 'cd apps/web && bun run typecheck'
-        language: system
-        pass_filenames: false
-        files: ^(apps/web/|packages/types/)
-
-      - id: types-typecheck
-        name: shared types typecheck
-        entry: bash -lc 'cd packages/types && bun run typecheck'
-        language: system
-        pass_filenames: false
-        files: ^packages/types/
-
-      - id: rust-format-write
-        name: rust format (auto-fix)
-        entry: bash -lc 'cd apps/daemon && cargo fmt --all'
-        language: system
-        pass_filenames: false
-        files: ^apps/daemon/
-
-      - id: rust-format-check
-        name: rust format check
-        entry: bash -lc 'cd apps/daemon && cargo fmt --all -- --check'
-        language: system
-        pass_filenames: false
-        files: ^apps/daemon/
-
-      - id: rust-lint
-        name: rust clippy
-        entry: bash -lc 'cd apps/daemon && cargo clippy --workspace -- -D warnings'
-        language: system
-        pass_filenames: false
-        files: ^apps/daemon/
-
-      - id: rust-check
-        name: rust check
-        entry: bash -lc 'cd apps/daemon && cargo check --workspace'
-        language: system
-        pass_filenames: false
-        files: ^apps/daemon/
 
       - id: web-tests
         name: web tests
-        entry: bash -lc 'cd apps/web && bun run test'
+        entry: bash -lc 'moon run web:test'
         language: system
         pass_filenames: false
         files: ^apps/web/
-        stages: [pre-push]
-
-      - id: rust-tests
-        name: rust tests
-        entry: bash -lc 'cd apps/daemon && cargo test --workspace'
-        language: system
-        pass_filenames: false
-        files: ^apps/daemon/
         stages: [pre-push]

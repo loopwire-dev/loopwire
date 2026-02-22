@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ApiError, api } from "../../shared/lib/api";
-import { wsClient } from "../../shared/lib/ws";
+import {
+	type GitStatusResponseDto,
+	gitStatus,
+	isNotGitRepoError,
+} from "../../shared/lib/daemon/rest";
+import {
+	onDaemonWsReconnect,
+	onGitStatusEvent,
+	subscribeGitStatus,
+	unsubscribeGitStatus,
+} from "../../shared/lib/daemon/ws";
 
 type FileStatus =
 	| "added"
@@ -15,14 +24,6 @@ interface GitFileInfo {
 	status: FileStatus;
 	additions?: number;
 	deletions?: number;
-}
-
-interface GitStatusApiResponse {
-	files: Record<
-		string,
-		{ status: string; additions?: number; deletions?: number }
-	>;
-	ignored_dirs: string[];
 }
 
 const STATUS_SEVERITY: Record<FileStatus, number> = {
@@ -55,24 +56,23 @@ const EMPTY_STATUS: GitStatusMap = {
 	loaded: false,
 };
 
-const gitStatusCache = new Map<string, GitStatusApiResponse>();
+const gitStatusCache = new Map<string, GitStatusResponseDto>();
 
-function fetchGitStatus(wid: string): Promise<GitStatusApiResponse | null> {
-	return api
-		.get<GitStatusApiResponse>("/git/status", { workspace_id: wid })
+function fetchGitStatus(wid: string): Promise<GitStatusResponseDto | null> {
+	return gitStatus(wid)
 		.then((res) => {
 			gitStatusCache.set(wid, res);
 			return res;
 		})
 		.catch((err) => {
-			if (err instanceof ApiError && err.code === "NOT_GIT_REPO") return null;
+			if (isNotGitRepoError(err)) return null;
 			return null;
 		});
 }
 
 export function useGitStatus(workspaceId: string | null): GitStatusMap {
 	// Seed state from module-level cache so colors render immediately on re-mount
-	const [data, setData] = useState<GitStatusApiResponse | null>(() =>
+	const [data, setData] = useState<GitStatusResponseDto | null>(() =>
 		workspaceId ? (gitStatusCache.get(workspaceId) ?? null) : null,
 	);
 	const [loaded, setLoaded] = useState(
@@ -104,16 +104,13 @@ export function useGitStatus(workspaceId: string | null): GitStatusMap {
 		});
 
 		// Subscribe to git status updates over WS
-		wsClient.send("git:subscribe", { workspace_id: workspaceId });
+		subscribeGitStatus(workspaceId);
 
 		// Listen for git:status push messages
-		const offStatus = wsClient.on("git:status", (envelope) => {
+		const offStatus = onGitStatusEvent((payload) => {
 			if (id !== fetchIdRef.current) return;
-			const payload = envelope.payload as unknown as GitStatusApiResponse & {
-				workspace_id: string;
-			};
 			if (payload.workspace_id !== workspaceId) return;
-			const response: GitStatusApiResponse = {
+			const response: GitStatusResponseDto = {
 				files: payload.files,
 				ignored_dirs: payload.ignored_dirs,
 			};
@@ -123,20 +120,16 @@ export function useGitStatus(workspaceId: string | null): GitStatusMap {
 		});
 
 		// Re-subscribe on WS reconnect
-		const offReconnect = wsClient.onReconnect(() => {
+		const offReconnect = onDaemonWsReconnect(() => {
 			if (id !== fetchIdRef.current) return;
-			wsClient.send("git:subscribe", { workspace_id: workspaceId });
+			subscribeGitStatus(workspaceId);
 		});
 
 		return () => {
 			++fetchIdRef.current; // invalidate pending callbacks
 			offStatus();
 			offReconnect();
-			wsClient.send(
-				"git:unsubscribe",
-				{ workspace_id: workspaceId },
-				{ queueWhenDisconnected: false },
-			);
+			unsubscribeGitStatus(workspaceId);
 		};
 	}, [workspaceId]);
 

@@ -14,8 +14,8 @@ Rust workspace for the local Loopwire daemon and core backend libraries.
 cargo run --bin loopwired -- start
 cargo check --workspace
 cargo test --workspace
-cargo clippy --workspace -- -D warnings
 cargo fmt --all -- --check
+qlty check --all --filter=clippy --fail-level=low
 ```
 
 ## Coverage
@@ -30,5 +30,4 @@ cargo llvm-cov --workspace --lcov --output-path lcov.info --fail-under-lines 1
 moon run daemon:dev
 moon run daemon:quality
 moon run daemon:coverage
-moon run root:git-add
 ```
