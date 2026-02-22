@@ -4,6 +4,7 @@ node_modules/
 # Build outputs
 dist/
 target/
+apps/web/coverage/
 
 # Environment
 .env
@@ -27,6 +28,3 @@ target/
 # Qlty
 .qlty/*
 !.qlty/qlty.toml
-
-# Coverage
-apps/web/coverage/

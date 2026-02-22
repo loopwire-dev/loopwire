@@ -168,6 +168,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           ref: ${{ needs.prepare.outputs.ship_sha }}
 
       - uses: moonrepo/setup-toolchain@v0
@@ -191,6 +192,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           ref: ${{ needs.prepare.outputs.ship_sha }}
 
       - uses: moonrepo/setup-toolchain@v0
@@ -219,6 +221,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           ref: ${{ needs.prepare.outputs.ship_sha }}
 
       - uses: moonrepo/setup-toolchain@v0
@@ -305,6 +308,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           ref: ${{ needs.prepare.outputs.ship_sha }}
 
       - uses: dtolnay/rust-toolchain@stable
@@ -345,6 +349,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/download-artifact@v4
         with:
