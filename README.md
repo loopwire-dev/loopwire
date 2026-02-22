@@ -8,6 +8,9 @@
   <a href="https://qlty.sh/gh/loopwire-dev/projects/loopwire">
     <img src="https://qlty.sh/gh/loopwire-dev/projects/loopwire/coverage.svg" alt="Tests Coverage" />
   </a>
+  <a href="https://qlty.sh/gh/loopwire-dev/projects/loopwire">
+    <img src="https://qlty.sh/gh/loopwire-dev/projects/loopwire/maintainability.svg" alt="Maintainability" />
+  </a>
   <a href="https://github.com/loopwire-dev/loopwire/actions/workflows/ci.yml">
     <img src="https://github.com/loopwire-dev/loopwire/actions/workflows/ci.yml/badge.svg" alt="CI" />
   </a>
