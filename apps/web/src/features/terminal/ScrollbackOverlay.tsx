@@ -4,6 +4,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { useScrollback } from "./useScrollback";
 import { binaryStringToBytes } from "./TerminalPagingController";
+import { LoopwireSpinner } from "../../shared/ui/LoopwireSpinner";
 
 const THEMES = {
   dark: {
@@ -150,10 +151,7 @@ export function ScrollbackOverlay({ sessionId, theme, onDismiss }: ScrollbackOve
         <div className="flex items-center gap-2 text-xs text-muted">
           <span>Scrollback history</span>
           {loading && (
-            <div
-              className="h-3 w-3 rounded-full border border-border border-t-accent animate-spin"
-              aria-label="Loading"
-            />
+            <LoopwireSpinner size={14} label="Loading scrollback history" />
           )}
           {canLoadOlder && !loading && (
             <button

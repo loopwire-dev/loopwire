@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../../shared/lib/api";
 import { Button } from "../../shared/ui/Button";
 import { useAppStore } from "../../shared/stores/app-store";
+import { LoopwireSpinner } from "../../shared/ui/LoopwireSpinner";
 
 const TRUSTED_DEVICES_KEY = "loopwire_trusted_devices";
 
@@ -172,9 +173,15 @@ export function ConnectPage() {
     <div className="flex items-center justify-center h-full">
       <div className="w-full max-w-sm p-6">
         <h2 className="text-xl font-semibold mb-2">Connect to Loopwire</h2>
+        {loading && (
+          <div className="mb-3 inline-flex items-center gap-2 text-sm text-muted">
+            <LoopwireSpinner size={18} label="Validating connection link" />
+            <span>Validating your connection link...</span>
+          </div>
+        )}
         <p className="text-sm text-muted mb-6">
           {loading
-            ? "Validating your connection link..."
+            ? "Secure handshake in progress."
             : "Enter the connection PIN if required to finish linking this device."}
         </p>
 
@@ -209,7 +216,14 @@ export function ConnectPage() {
               disabled={!pin.trim() || submitting}
               className="w-full"
             >
-              {submitting ? "Connecting..." : "Connect"}
+              {submitting ? (
+                <span className="inline-flex items-center gap-2">
+                  <LoopwireSpinner size={14} decorative />
+                  <span>Connecting...</span>
+                </span>
+              ) : (
+                "Connect"
+              )}
             </Button>
           </form>
         )}

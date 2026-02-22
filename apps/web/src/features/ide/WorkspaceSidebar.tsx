@@ -15,6 +15,7 @@ import { getAgentIcon } from "../agent/agent-icons";
 import { useAgent } from "../agent/useAgent";
 import { SessionContextMenu } from "./SessionContextMenu";
 import { SessionIconPickerDialog } from "./SessionIconPickerDialog";
+import { useGitStatus } from "../workspace/useGitStatus";
 
 function formatAgentName(agentType: string): string {
 	const labels: Record<string, string> = {
@@ -43,15 +44,6 @@ const TAB_ACTIVE_HIGHLIGHT_CLASS =
 const TAB_HOVER_HIGHLIGHT_CLASS =
 	"bg-surface-raised/80 dark:bg-white/8";
 
-const PANEL_ITEMS: {
-	panel: "files" | "git";
-	label: string;
-	Icon: typeof FolderTree;
-}[] = [
-	{ panel: "files", label: "Files", Icon: FolderTree },
-	{ panel: "git", label: "Git Diff", Icon: GitBranch },
-];
-
 interface WorkspaceSidebarProps {
 	sessions: WorkspaceSession[];
 	activePanel: WorkspacePanel;
@@ -63,6 +55,8 @@ export function WorkspaceSidebar({
 }: WorkspaceSidebarProps) {
 	const workspacePath = useAppStore((s) => s.workspacePath);
 	const workspaceId = useAppStore((s) => s.workspaceId);
+	const gitStatus = useGitStatus(workspaceId);
+	const showGitSection = gitStatus.loaded && gitStatus.isGitRepo;
 	const setActivePanel = useAppStore((s) => s.setActivePanel);
 	const reorderWorkspaceSession = useAppStore((s) => s.reorderWorkspaceSession);
 	const renameSessionCustomName = useAppStore((s) => s.renameSessionCustomName);
@@ -185,6 +179,20 @@ export function WorkspaceSidebar({
 		if (!workspacePath) return;
 		setActivePanel(workspacePath, panel);
 	};
+
+	useEffect(() => {
+		if (!workspacePath) return;
+		if (!gitStatus.loaded || gitStatus.isGitRepo) return;
+		if (activePanel.kind === "panel" && activePanel.panel === "git") {
+			setActivePanel(workspacePath, { kind: "panel", panel: "files" });
+		}
+	}, [
+		workspacePath,
+		activePanel,
+		gitStatus.loaded,
+		gitStatus.isGitRepo,
+		setActivePanel,
+	]);
 
 	const isPanelActive = (panel: "files" | "git") =>
 		activePanel.kind === "panel" && activePanel.panel === panel;
@@ -434,33 +442,53 @@ export function WorkspaceSidebar({
 		<div className="h-full flex flex-col bg-surface w-[208px] shrink-0 select-none overflow-y-auto">
 			{/* PANELS */}
 			<div className="pt-3 pb-1">
-					<div className="text-[11px] font-semibold text-muted uppercase tracking-wider px-3 py-1.5">
-						Workspace
-					</div>
-				{PANEL_ITEMS.map(({ panel, label, Icon }) => {
-					const active = isPanelActive(panel);
-					return (
+				<div className="text-[11px] font-semibold text-muted uppercase tracking-wider px-3 py-1.5">
+					Workspace
+				</div>
+				<button
+					type="button"
+					onClick={() => selectPanel({ kind: "panel", panel: "files" })}
+					className={`group relative mb-0.5 last:mb-0 w-full flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer transition-colors ${
+						isPanelActive("files") ? "font-medium" : ""
+					}`}
+				>
+					<span
+						aria-hidden="true"
+						className={`${TAB_HIGHLIGHT_BASE_CLASS} ${
+							isPanelActive("files")
+								? `${TAB_ACTIVE_HIGHLIGHT_CLASS} opacity-100`
+								: `${TAB_HOVER_HIGHLIGHT_CLASS} opacity-0 group-hover:opacity-100`
+						}`}
+					/>
+					<FolderTree size={14} className="relative shrink-0 text-muted" />
+					<span className="relative truncate">Files</span>
+				</button>
+
+				{showGitSection ? (
+					<>
+						<div className="text-[11px] font-semibold text-muted uppercase tracking-wider px-3 py-1.5 pt-3">
+							Git
+						</div>
 						<button
-							key={panel}
 							type="button"
-							onClick={() => selectPanel({ kind: "panel", panel })}
+							onClick={() => selectPanel({ kind: "panel", panel: "git" })}
 							className={`group relative mb-0.5 last:mb-0 w-full flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer transition-colors ${
-								active ? "font-medium" : ""
+								isPanelActive("git") ? "font-medium" : ""
 							}`}
 						>
 							<span
 								aria-hidden="true"
 								className={`${TAB_HIGHLIGHT_BASE_CLASS} ${
-									active
+									isPanelActive("git")
 										? `${TAB_ACTIVE_HIGHLIGHT_CLASS} opacity-100`
 										: `${TAB_HOVER_HIGHLIGHT_CLASS} opacity-0 group-hover:opacity-100`
 								}`}
 							/>
-							<Icon size={14} className="relative shrink-0 text-muted" />
-							<span className="relative truncate">{label}</span>
+							<GitBranch size={14} className="relative shrink-0 text-muted" />
+							<span className="relative truncate">Diff</span>
 						</button>
-					);
-				})}
+					</>
+				) : null}
 			</div>
 
 			{/* AGENTS */}

@@ -2,7 +2,6 @@ import {
 	Check,
 	CheckCircle2,
 	Copy,
-	LoaderCircle,
 	Moon,
 	Search,
 	Sun,
@@ -10,6 +9,7 @@ import {
 import { useTheme } from "next-themes";
 import { useState } from "react";
 import { Button } from "../../shared/ui/Button";
+import { LoopwireSpinner } from "../../shared/ui/LoopwireSpinner";
 import { LoopwireLogo } from "./LoopwireLogo";
 
 const INSTALL_COMMAND = "curl -fsSL https://loopwire.dev/install.sh | sh";
@@ -151,7 +151,7 @@ export function LandingPage({
 									disabled={discoveryEnabled}
 								>
 									{discoveryEnabled ? (
-										<LoaderCircle size={18} className="animate-spin" />
+										<LoopwireSpinner size={18} decorative />
 									) : (
 										<Search size={18} />
 									)}

@@ -5,6 +5,7 @@ import { useTheme } from "next-themes";
 import { api } from "../../shared/lib/api";
 import { useAppStore } from "../../shared/stores/app-store";
 import { ScrollbackOverlay } from "./ScrollbackOverlay";
+import { LoopwireSpinner } from "../../shared/ui/LoopwireSpinner";
 
 interface TerminalProps {
   sessionId: string;
@@ -134,10 +135,7 @@ export function Terminal({ sessionId }: TerminalProps) {
     >
       {isLoading && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-surface/70">
-          <div
-            className="h-5 w-5 rounded-full border-2 border-border border-t-accent animate-spin"
-            aria-label="Loading terminal"
-          />
+          <LoopwireSpinner size={26} label="Loading terminal" />
           <p className="text-xs text-muted">Getting things ready...</p>
         </div>
       )}

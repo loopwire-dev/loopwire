@@ -3,7 +3,6 @@ import type { LucideIcon } from "lucide-react";
 import {
 	Check,
 	Copy,
-	Loader2,
 	LogOut,
 	Monitor,
 	Moon,
@@ -20,6 +19,7 @@ import { api } from "../lib/api";
 import type { Theme } from "../lib/theme";
 import { useAppStore } from "../stores/app-store";
 import { Dialog } from "../ui/Dialog";
+import { LoopwireSpinner } from "../ui/LoopwireSpinner";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -309,7 +309,7 @@ function GeneralSection() {
 							className="rounded-lg p-2 bg-accent text-accent-foreground hover:bg-accent-hover disabled:opacity-60 disabled:hover:bg-accent transition-colors"
 						>
 							{shareBusy ? (
-								<Loader2 size={14} className="animate-spin" />
+								<LoopwireSpinner size={14} decorative />
 							) : (
 								<Play size={14} />
 							)}

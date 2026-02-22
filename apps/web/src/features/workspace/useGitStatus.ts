@@ -33,6 +33,7 @@ export interface GitStatusMap {
   getFile(path: string): GitFileInfo | null;
   getFolder(dirPath: string): FileStatus;
   isIgnored(path: string): boolean;
+  isGitRepo: boolean;
   loaded: boolean;
 }
 
@@ -40,6 +41,7 @@ const EMPTY_STATUS: GitStatusMap = {
   getFile: () => null,
   getFolder: () => "clean",
   isIgnored: () => false,
+  isGitRepo: false,
   loaded: false,
 };
 
@@ -161,6 +163,7 @@ export function useGitStatus(workspaceId: string | null): GitStatusMap {
         }
         return false;
       },
+      isGitRepo: true,
       loaded: true,
     };
   }, [loaded, data]);
