@@ -27,3 +27,6 @@ target/
 # Qlty
 .qlty/*
 !.qlty/qlty.toml
+
+# Coverage
+apps/web/coverage/
