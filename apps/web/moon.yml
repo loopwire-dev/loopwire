@@ -23,7 +23,7 @@ tasks:
       envFile: '/.env'
 
   build:
-    command: 'bunx --bun vite build'
+    script: 'bun run build'
     inputs:
       - '@group(sources)'
       - '@group(configs)'
