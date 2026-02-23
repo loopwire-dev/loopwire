@@ -78,14 +78,16 @@ tasks:
 
   complexity:
     command: >-
-      bash -lc 'qlty metrics apps/web;
-      qlty smells --no-snippets apps/web || true'
+      bash -lc 'cd "$MOON_WORKSPACE_ROOT" &&
+      qlty metrics apps/web &&
+      qlty smells --no-snippets apps/web'
     inputs:
       - '@group(sources)'
       - '@group(configs)'
 
   coverage:
-    script: 'bun run coverage'
+    command: >-
+      bash -lc 'bun run coverage'
     inputs:
       - '@group(sources)'
       - '@group(configs)'

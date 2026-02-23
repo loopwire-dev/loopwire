@@ -1,4 +1,6 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+mod git_helpers;
+
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::process::{Command, Output};
 use std::sync::{Mutex, OnceLock};
@@ -12,6 +14,9 @@ use uuid::Uuid;
 
 use crate::error::{ApiError, ApiErrorResponse};
 use crate::state::AppState;
+#[cfg(test)]
+use git_helpers::porcelain_code_to_status;
+use git_helpers::{append_patch_segment, collect_ignored_dirs, parse_numstat, parse_porcelain};
 
 #[derive(Deserialize)]
 pub struct GitDiffQuery {
@@ -94,19 +99,6 @@ fn ensure_git_repo(cwd: &Path) -> Result<(), ApiErrorResponse> {
             status: StatusCode::BAD_REQUEST,
             error: ApiError::new("NOT_GIT_REPO", "Workspace is not a Git repository"),
         })
-    }
-}
-
-fn append_patch_segment(target: &mut String, segment: &str) {
-    if segment.is_empty() {
-        return;
-    }
-    if !target.is_empty() && !target.ends_with('\n') {
-        target.push('\n');
-    }
-    target.push_str(segment);
-    if !target.ends_with('\n') {
-        target.push('\n');
     }
 }
 
@@ -322,97 +314,6 @@ const GIT_STATUS_CACHE_TTL: Duration = Duration::from_millis(1200);
 fn git_status_cache() -> &'static Mutex<BTreeMap<Uuid, CachedStatus>> {
     static CACHE: OnceLock<Mutex<BTreeMap<Uuid, CachedStatus>>> = OnceLock::new();
     CACHE.get_or_init(|| Mutex::new(BTreeMap::new()))
-}
-
-fn porcelain_code_to_status(x: u8, y: u8) -> &'static str {
-    match (x, y) {
-        (b'?', b'?') => "untracked",
-        (b'A', _) | (_, b'A') => "added",
-        (b'D', _) | (_, b'D') => "deleted",
-        (b'R', _) | (_, b'R') => "renamed",
-        (b'M', _) | (_, b'M') | (b'U', _) | (_, b'U') => "modified",
-        _ => "modified",
-    }
-}
-
-fn parse_porcelain(raw: &[u8]) -> BTreeMap<String, GitFileStatus> {
-    let mut files = BTreeMap::new();
-    let mut iter = raw.split(|&b| b == 0);
-    while let Some(entry) = iter.next() {
-        if entry.len() < 4 {
-            continue;
-        }
-        let x = entry[0];
-        let y = entry[1];
-        // entry[2] is a space
-        let path = String::from_utf8_lossy(&entry[3..]).to_string();
-        let status = porcelain_code_to_status(x, y);
-        files.insert(
-            path,
-            GitFileStatus {
-                status: status.to_string(),
-                additions: None,
-                deletions: None,
-            },
-        );
-        // Renames have an extra NUL-separated field (the old name) — consume it
-        if x == b'R' || y == b'R' {
-            let _ = iter.next();
-        }
-    }
-    files
-}
-
-fn parse_numstat(raw: &str, files: &mut BTreeMap<String, GitFileStatus>, prefix: &str) {
-    for line in raw.lines() {
-        let parts: Vec<&str> = line.splitn(3, '\t').collect();
-        if parts.len() < 3 {
-            continue;
-        }
-        let additions = parts[0].parse::<u64>().ok();
-        let deletions = parts[1].parse::<u64>().ok();
-        let path = parts[2];
-        let rel_path = if !prefix.is_empty() {
-            match path.strip_prefix(prefix) {
-                Some(stripped) => stripped,
-                None => continue,
-            }
-        } else {
-            path
-        };
-        if let Some(entry) = files.get_mut(rel_path) {
-            entry.additions = additions;
-            entry.deletions = deletions;
-        }
-    }
-}
-
-fn collect_ignored_dirs(raw: &[u8], prefix: &str) -> Vec<String> {
-    let mut dirs = HashSet::new();
-    for bytes in raw.split(|&b| b == 0) {
-        if bytes.is_empty() {
-            continue;
-        }
-        let path = String::from_utf8_lossy(bytes).to_string();
-        // Strip workspace prefix — skip paths outside the workspace
-        let rel_path = if !prefix.is_empty() {
-            match path.strip_prefix(prefix) {
-                Some(stripped) => stripped.to_string(),
-                None => continue,
-            }
-        } else {
-            path
-        };
-        // With --directory, git returns dirs with trailing slash.
-        // Keep the path as-is (strip trailing slash for dirs).
-        let clean = rel_path.trim_end_matches('/').to_string();
-        if !clean.is_empty() {
-            dirs.insert(clean);
-        }
-    }
-    let mut sorted: Vec<String> = dirs.into_iter().collect();
-    sorted.sort();
-    sorted
 }
 
 /// Compute git status for a workspace root directory.
@@ -801,6 +702,27 @@ mod tests {
     fn collect_ignored_dirs_deduplicates() {
         let dirs = collect_ignored_dirs(b"dist/\0dist/\0", "");
         assert_eq!(dirs, vec!["dist"]);
+    }
+
+    #[test]
+    fn collect_ignored_dirs_returns_sorted_entries() {
+        let dirs = collect_ignored_dirs(b"z/\0a/\0m/\0", "");
+        assert_eq!(dirs, vec!["a", "m", "z"]);
+    }
+
+    #[test]
+    fn parse_numstat_prefix_skips_non_matching_paths() {
+        let mut files = BTreeMap::new();
+        files.insert(
+            "inside.rs".to_string(),
+            GitFileStatus {
+                status: "modified".to_string(),
+                additions: None,
+                deletions: None,
+            },
+        );
+        parse_numstat("4\t2\toutside/inside.rs\n", &mut files, "src/");
+        assert!(files["inside.rs"].additions.is_none());
     }
 
     // ── append_patch_segment ──────────────────────────────────────────

@@ -62,4 +62,46 @@ mod tests {
         // Use a high-but-valid PID to avoid "illegal process id" stderr noise
         assert!(!is_process_alive(99_999));
     }
+
+    #[test]
+    #[cfg(unix)]
+    fn terminate_process_returns_false_for_nonexistent_pid() {
+        assert!(!terminate_process(99_999));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn terminate_process_kills_running_process() {
+        // Redirect sleep's stdout/stderr to /dev/null so that the background
+        // process does not hold the shell's output pipe open. Without this,
+        // Command::output() would block until sleep exits (60 seconds).
+        // With the redirect the shell prints the PID and exits promptly;
+        // sleep is reparented to init/launchd which reaps it on exit.
+        let output = std::process::Command::new("sh")
+            .args(["-c", "sleep 60 >/dev/null 2>&1 & echo $!"])
+            .output()
+            .expect("failed to spawn background sleep");
+
+        let pid_str = String::from_utf8_lossy(&output.stdout);
+        let pid: u32 = pid_str
+            .trim()
+            .parse()
+            .expect("shell did not output a valid PID");
+
+        assert!(
+            is_process_alive(pid),
+            "process should be alive before termination"
+        );
+
+        let result = terminate_process(pid);
+
+        assert!(
+            result,
+            "terminate_process should return true for a live process"
+        );
+        assert!(
+            !is_process_alive(pid),
+            "process should be dead after termination"
+        );
+    }
 }

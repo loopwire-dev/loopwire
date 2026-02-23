@@ -23,7 +23,7 @@ import {
 	remoteShareStatus,
 	remoteShareStop,
 } from "../lib/daemon/rest";
-import type { Theme } from "../lib/theme";
+import type { Theme } from "../lib/runtime/theme";
 import { useAppStore } from "../stores/app-store";
 import { Dialog } from "../ui/Dialog";
 import { LoopwireSpinner } from "../ui/LoopwireSpinner";

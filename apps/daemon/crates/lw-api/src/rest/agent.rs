@@ -509,6 +509,8 @@ pub async fn session_scrollback(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::extract::State;
+    use axum::Json;
 
     fn make_handle(
         sort_order: Option<i32>,
@@ -600,5 +602,28 @@ mod tests {
         assert!(!is_active_status(lw_agent::AgentStatus::Stopped));
         assert!(!is_active_status(lw_agent::AgentStatus::Starting));
         assert!(!is_active_status(lw_agent::AgentStatus::Failed));
+    }
+    #[tokio::test]
+    async fn available_handler_returns_three_runner_types() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = lw_config::DaemonConfig::default();
+        config.set_paths(lw_config::ConfigPaths::with_base(dir.path().to_path_buf()));
+        let hash = crate::auth::TokenStore::hash_token("test");
+        let state = crate::state::AppState::new(config, hash).unwrap();
+
+        let Json(agents) = available(State(state)).await;
+        assert_eq!(agents.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn list_sessions_handler_returns_empty_with_no_active_agents() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = lw_config::DaemonConfig::default();
+        config.set_paths(lw_config::ConfigPaths::with_base(dir.path().to_path_buf()));
+        let hash = crate::auth::TokenStore::hash_token("test");
+        let state = crate::state::AppState::new(config, hash).unwrap();
+
+        let Json(sessions) = list_sessions(State(state)).await;
+        assert!(sessions.is_empty());
     }
 }

@@ -296,4 +296,81 @@ mod tests {
         store.consume_bootstrap().await;
         assert!(!store.validate_bootstrap("bootstrap-secret").await);
     }
+
+    #[tokio::test]
+    async fn set_bootstrap_hash_replaces_stored_hash() {
+        let (_dir, store) = make_token_store();
+        store.consume_bootstrap().await;
+        assert!(!store.validate_bootstrap("bootstrap-secret").await);
+
+        let new_hash = TokenStore::hash_token("new-secret");
+        store.set_bootstrap_hash(new_hash).await;
+        assert!(store.validate_bootstrap("new-secret").await);
+    }
+
+    #[test]
+    fn load_session_hashes_reads_from_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = ConfigPaths::with_base(dir.path().to_path_buf());
+        std::fs::create_dir_all(dir.path()).unwrap();
+
+        // Pre-populate the sessions file
+        let hash_a = TokenStore::hash_token("token-a");
+        let hash_b = TokenStore::hash_token("token-b");
+        let content = format!("{}\n{}", hash_a, hash_b);
+        std::fs::write(paths.sessions_path(), &content).unwrap();
+
+        let loaded = load_session_hashes(&paths);
+        assert!(loaded.contains(&hash_a));
+        assert!(loaded.contains(&hash_b));
+        assert_eq!(loaded.len(), 2);
+    }
+
+    #[test]
+    fn load_session_hashes_empty_when_file_missing() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = ConfigPaths::with_base(dir.path().to_path_buf());
+        let loaded = load_session_hashes(&paths);
+        assert!(loaded.is_empty());
+    }
+
+    #[test]
+    fn load_or_create_bootstrap_token_creates_new_when_missing() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = ConfigPaths::with_base(dir.path().to_path_buf());
+        std::fs::create_dir_all(dir.path()).unwrap();
+
+        let (token, hash) = load_or_create_bootstrap_token(&paths);
+        assert!(!token.is_empty());
+        assert_eq!(hash, TokenStore::hash_token(&token));
+        // File should now exist
+        assert!(paths.token_path().exists());
+    }
+
+    #[test]
+    fn load_or_create_bootstrap_token_reuses_existing() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = ConfigPaths::with_base(dir.path().to_path_buf());
+        std::fs::create_dir_all(dir.path()).unwrap();
+        std::fs::write(paths.token_path(), "my-existing-token").unwrap();
+
+        let (token, hash) = load_or_create_bootstrap_token(&paths);
+        assert_eq!(token, "my-existing-token");
+        assert_eq!(hash, TokenStore::hash_token("my-existing-token"));
+    }
+
+    #[test]
+    fn regenerate_bootstrap_token_writes_new_token() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = ConfigPaths::with_base(dir.path().to_path_buf());
+        std::fs::create_dir_all(dir.path()).unwrap();
+        std::fs::write(paths.token_path(), "old-token").unwrap();
+
+        let new_token = regenerate_bootstrap_token(&paths);
+        assert!(!new_token.is_empty());
+        assert_ne!(new_token, "old-token");
+
+        let on_disk = std::fs::read_to_string(paths.token_path()).unwrap();
+        assert_eq!(on_disk.trim(), new_token);
+    }
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { getDaemonUrl } from "../lib/config";
-import { discoverDaemon } from "../lib/discovery";
+import { discoverDaemon } from "../lib/network/discovery";
+import { getDaemonUrl } from "../lib/runtime/config";
 
 const PROBE_QUERY = "probe=1";
 const HEARTBEAT_TIMEOUT_MS = 9000;

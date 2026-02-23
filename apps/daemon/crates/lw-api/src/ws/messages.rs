@@ -316,4 +316,18 @@ mod tests {
         assert_eq!(parsed.request_id, Some("r1".to_string()));
         assert_eq!(parsed.payload["key"], 42);
     }
+
+    #[test]
+    fn git_status() {
+        let id = Uuid::new_v4();
+        let response = serde_json::json!({
+            "files": {"src/main.rs": {"status": "modified"}},
+            "ignored_dirs": ["target"]
+        });
+        let env = WsEnvelope::git_status(id, response.clone());
+        assert_eq!(env.msg_type, "git:status");
+        assert_eq!(env.payload["workspace_id"], id.to_string());
+        assert_eq!(env.payload["files"], response["files"]);
+        assert_eq!(env.payload["ignored_dirs"], response["ignored_dirs"]);
+    }
 }

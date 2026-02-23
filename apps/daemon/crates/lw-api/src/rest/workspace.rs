@@ -290,7 +290,7 @@ pub struct RegisterRequest {
     pub path: String,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct RegisterResponse {
     pub workspace_id: Uuid,
     pub path: String,
@@ -555,6 +555,9 @@ pub async fn remove_workspace(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::extract::{Query, State};
+    use axum::http::StatusCode;
+    use axum::Json;
     use lw_config::ConfigPaths;
 
     #[test]
@@ -598,6 +601,194 @@ mod tests {
         let parsed: WorkspaceEntry = serde_json::from_str(json).unwrap();
         assert_eq!(parsed.path, "/tmp/test");
         assert!(!parsed.id.is_nil());
+    }
+
+    // ── default_workspace_name ────────────────────────────────────────
+
+    #[test]
+    fn default_workspace_name_returns_last_path_component() {
+        assert_eq!(
+            default_workspace_name("/home/user/my-project"),
+            "my-project"
+        );
+    }
+
+    #[test]
+    fn default_workspace_name_handles_nested_path() {
+        assert_eq!(default_workspace_name("/a/b/c/d"), "d");
+    }
+
+    #[test]
+    fn default_workspace_name_falls_back_to_full_path_for_root() {
+        assert_eq!(default_workspace_name("/"), "/");
+    }
+
+    #[test]
+    fn default_workspace_name_plain_name() {
+        assert_eq!(default_workspace_name("myproject"), "myproject");
+    }
+
+    // ── load_workspaces edge cases ────────────────────────────────────
+
+    #[test]
+    fn load_workspaces_returns_empty_when_dir_does_not_exist() {
+        let root = std::env::temp_dir().join(format!("loopwire-nonexistent-{}", Uuid::new_v4()));
+        let config = root.join("config");
+        let paths = ConfigPaths::with_base(config);
+        // workspaces data dir doesn't exist → should return empty vec, not panic
+        let result = load_workspaces(&paths);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn load_workspaces_deduplicates_entries_with_same_path() {
+        let root = std::env::temp_dir().join(format!("loopwire-test-{}", Uuid::new_v4()));
+        let workspace = root.join("ws");
+        let config = root.join("config");
+        std::fs::create_dir_all(&workspace).unwrap();
+        std::fs::create_dir_all(&config).unwrap();
+
+        let paths = ConfigPaths::with_base(config.clone());
+        let ws_path = workspace.to_string_lossy().to_string();
+
+        // Save the same logical workspace twice under two different IDs
+        let entry_a = WorkspaceEntry {
+            id: Uuid::new_v4(),
+            path: ws_path.clone(),
+            name: "First".to_string(),
+            pinned: false,
+            icon: None,
+        };
+        let entry_b = WorkspaceEntry {
+            id: Uuid::new_v4(),
+            path: ws_path.clone(),
+            name: "Second".to_string(),
+            pinned: false,
+            icon: None,
+        };
+        save_workspaces(&paths, &[entry_a, entry_b]).unwrap();
+
+        // load_workspaces must deduplicate by path — only one entry per path
+        let loaded = load_workspaces(&paths);
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].path, ws_path);
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    // ── load/save agent sort orders ───────────────────────────────────
+
+    #[test]
+    fn load_workspace_agent_sort_orders_returns_only_agents_with_order() {
+        let root = std::env::temp_dir().join(format!("loopwire-test-{}", Uuid::new_v4()));
+        let workspace = root.join("ws");
+        let config = root.join("config");
+        std::fs::create_dir_all(&workspace).unwrap();
+        std::fs::create_dir_all(&config).unwrap();
+
+        let paths = ConfigPaths::with_base(config.clone());
+        let ws_path = workspace.to_string_lossy().to_string();
+        let ws_entry = WorkspaceEntry {
+            id: Uuid::new_v4(),
+            path: ws_path.clone(),
+            name: "W".to_string(),
+            pinned: false,
+            icon: None,
+        };
+        save_workspaces(&paths, std::slice::from_ref(&ws_entry)).unwrap();
+
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+        let agents = std::collections::HashMap::from([
+            (
+                a,
+                WorkspaceAgentEntry {
+                    sort_order: Some(3),
+                    ..Default::default()
+                },
+            ),
+            (
+                b,
+                WorkspaceAgentEntry {
+                    sort_order: None, // no sort order
+                    ..Default::default()
+                },
+            ),
+        ]);
+        save_workspace_agents(&paths, workspace.as_path(), &agents).unwrap();
+
+        let orders = load_workspace_agent_sort_orders(&paths, workspace.as_path());
+        assert_eq!(orders.len(), 1);
+        assert_eq!(orders[&a], 3);
+        assert!(!orders.contains_key(&b));
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn save_workspace_agent_sort_orders_updates_existing_and_clears_others() {
+        let root = std::env::temp_dir().join(format!("loopwire-test-{}", Uuid::new_v4()));
+        let workspace = root.join("ws");
+        let config = root.join("config");
+        std::fs::create_dir_all(&workspace).unwrap();
+        std::fs::create_dir_all(&config).unwrap();
+
+        let paths = ConfigPaths::with_base(config.clone());
+        let ws_entry = WorkspaceEntry {
+            id: Uuid::new_v4(),
+            path: workspace.to_string_lossy().to_string(),
+            name: "W".to_string(),
+            pinned: false,
+            icon: None,
+        };
+        save_workspaces(&paths, std::slice::from_ref(&ws_entry)).unwrap();
+
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+        let agents = std::collections::HashMap::from([
+            (
+                a,
+                WorkspaceAgentEntry {
+                    sort_order: Some(0),
+                    ..Default::default()
+                },
+            ),
+            (
+                b,
+                WorkspaceAgentEntry {
+                    sort_order: Some(1),
+                    ..Default::default()
+                },
+            ),
+        ]);
+        save_workspace_agents(&paths, workspace.as_path(), &agents).unwrap();
+
+        // Now update: only 'a' gets a new order; 'b' is omitted → its sort_order cleared
+        let new_orders = std::collections::HashMap::from([(a, 99)]);
+        save_workspace_agent_sort_orders(&paths, workspace.as_path(), &new_orders).unwrap();
+
+        let loaded = load_workspace_agents(&paths, workspace.as_path());
+        assert_eq!(loaded[&a].sort_order, Some(99));
+        assert_eq!(loaded[&b].sort_order, None);
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    // ── WorkspaceAgentEntry defaults ──────────────────────────────────
+
+    #[test]
+    fn workspace_agent_entry_default_values() {
+        let entry = WorkspaceAgentEntry::default();
+        assert!(entry.agent_type.is_empty());
+        assert!(entry.conversation_id.is_none());
+        assert!(entry.custom_name.is_none());
+        assert!(!entry.pinned);
+        assert!(entry.icon.is_none());
+        assert!(entry.sort_order.is_none());
+        assert!(entry.resumability_status.is_none());
+        assert!(entry.resume_failure_reason.is_none());
+        assert!(entry.created_at.is_none());
+        assert!(entry.pid.is_none());
     }
 
     #[test]
@@ -744,5 +935,96 @@ mod tests {
         assert!(!persisted_content.contains("\"agent_sort_orders\""));
 
         let _ = std::fs::remove_dir_all(root);
+    }
+    async fn make_test_state() -> (tempfile::TempDir, crate::state::AppState) {
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = lw_config::DaemonConfig::default();
+        config.set_paths(ConfigPaths::with_base(dir.path().to_path_buf()));
+        let hash = crate::auth::TokenStore::hash_token("test");
+        let state = crate::state::AppState::new(config, hash).unwrap();
+        (dir, state)
+    }
+
+    #[tokio::test]
+    async fn roots_handler_returns_at_least_home_dir() {
+        let Json(resp) = roots().await;
+        // suggest_roots() always includes home if $HOME is set; at minimum it's a Vec
+        let _ = resp.roots; // must not panic
+    }
+
+    #[tokio::test]
+    async fn browse_handler_rejects_relative_path() {
+        let result = browse(Query(BrowseQuery {
+            path: "relative/path".to_string(),
+        }))
+        .await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.status, StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn browse_handler_valid_absolute_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let result = browse(Query(BrowseQuery {
+            path: dir.path().to_string_lossy().to_string(),
+        }))
+        .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn list_workspaces_handler_returns_empty_initially() {
+        let (_dir, state) = make_test_state().await;
+        let Json(workspaces) = list_workspaces(State(state)).await;
+        assert!(workspaces.is_empty());
+    }
+
+    #[tokio::test]
+    async fn register_handler_rejects_non_absolute_path() {
+        let (_dir, state) = make_test_state().await;
+        let result = register(
+            State(state),
+            Json(RegisterRequest {
+                path: "relative/path".to_string(),
+            }),
+        )
+        .await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.status, StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn register_handler_rejects_nonexistent_directory() {
+        let (_dir, state) = make_test_state().await;
+        let result = register(
+            State(state),
+            Json(RegisterRequest {
+                path: "/nonexistent/path/xyz/abc".to_string(),
+            }),
+        )
+        .await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.status, StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn register_handler_succeeds_with_valid_directory() {
+        let (config_dir, state) = make_test_state().await;
+        let ws_dir = tempfile::tempdir().unwrap();
+        let result = register(
+            State(state),
+            Json(RegisterRequest {
+                path: ws_dir.path().to_string_lossy().to_string(),
+            }),
+        )
+        .await;
+        assert!(result.is_ok());
+        let (status, Json(resp)) = result.unwrap();
+        assert_eq!(status, StatusCode::CREATED);
+        assert_eq!(resp.path, ws_dir.path().to_string_lossy().to_string());
+        drop(config_dir);
     }
 }

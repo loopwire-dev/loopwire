@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isEmojiShortcode } from "../workspace-sidebar-utils";
+import { isEmojiShortcode } from "../lib/workspaceSidebarUtils";
 
 describe("isEmojiShortcode", () => {
 	it("matches simple shortcodes", () => {

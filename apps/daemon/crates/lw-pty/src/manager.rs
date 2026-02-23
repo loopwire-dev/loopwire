@@ -93,3 +93,59 @@ impl Default for PtyManager {
         Self::new()
     }
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use uuid::Uuid;
+
+    #[tokio::test]
+    async fn new_starts_with_empty_session_list() {
+        let mgr = PtyManager::new();
+        assert!(mgr.list().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn default_is_equivalent_to_new() {
+        let mgr = PtyManager::default();
+        assert!(mgr.list().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_nonexistent_returns_session_not_found_error() {
+        let mgr = PtyManager::new();
+        let id = Uuid::new_v4();
+        let result = mgr.get(&id).await;
+        assert!(
+            matches!(result, Err(crate::PtyError::SessionNotFound(found_id)) if found_id == id)
+        );
+    }
+
+    #[tokio::test]
+    async fn remove_nonexistent_returns_none() {
+        let mgr = PtyManager::new();
+        let result = mgr.remove(&Uuid::new_v4()).await;
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn kill_nonexistent_returns_session_not_found_error() {
+        let mgr = PtyManager::new();
+        let id = Uuid::new_v4();
+        let result = mgr.kill(&id).await;
+        assert!(
+            matches!(result, Err(crate::PtyError::SessionNotFound(found_id)) if found_id == id)
+        );
+    }
+
+    #[tokio::test]
+    async fn reap_stopped_on_empty_manager_returns_empty_vec() {
+        let mgr = PtyManager::new();
+        let reaped = mgr.reap_stopped().await;
+        assert!(reaped.is_empty());
+    }
+}

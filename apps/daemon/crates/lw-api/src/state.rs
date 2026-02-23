@@ -106,3 +106,50 @@ impl AppState {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn make_test_state() -> (tempfile::TempDir, AppState) {
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = lw_config::DaemonConfig::default();
+        config.set_paths(lw_config::ConfigPaths::with_base(dir.path().to_path_buf()));
+        let bootstrap_hash = crate::auth::TokenStore::hash_token("test-bootstrap");
+        let state = AppState::new(config, bootstrap_hash).unwrap();
+        (dir, state)
+    }
+
+    #[tokio::test]
+    async fn new_creates_state_with_version_set() {
+        let (_dir, state) = make_test_state().await;
+        assert!(!state.version.is_empty());
+    }
+
+    #[tokio::test]
+    async fn new_workspace_registry_starts_empty() {
+        let (_dir, state) = make_test_state().await;
+        let id = uuid::Uuid::new_v4();
+        let result = state.workspace_registry.resolve(&id, ".").await;
+        assert!(matches!(
+            result,
+            Err(lw_fs::FsError::WorkspaceNotRegistered(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn new_token_store_validates_provided_bootstrap_hash() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = lw_config::DaemonConfig::default();
+        config.set_paths(lw_config::ConfigPaths::with_base(dir.path().to_path_buf()));
+        let hash = crate::auth::TokenStore::hash_token("my-secret");
+        let state = AppState::new(config, hash).unwrap();
+        assert!(state.token_store.validate_bootstrap("my-secret").await);
+    }
+
+    #[tokio::test]
+    async fn new_agent_manager_exposes_three_runner_types() {
+        let (_dir, state) = make_test_state().await;
+        assert_eq!(state.agent_manager.available_agents().len(), 3);
+    }
+}

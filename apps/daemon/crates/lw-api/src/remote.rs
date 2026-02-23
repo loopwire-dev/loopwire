@@ -1,4 +1,5 @@
 mod crypto;
+mod invite;
 mod tunnel;
 
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
@@ -13,6 +14,9 @@ use tokio::sync::{Mutex, RwLock};
 
 use crate::auth::{generate_token, TokenStore};
 use crypto::{constant_time_eq, hash_pin, sign_payload, verify_pin, TrustedDevicePayload};
+use invite::{build_connect_url, validate_invite};
+#[cfg(test)]
+use invite::{obfuscate_backend_target, parse_hex_or_bytes, stream_key_byte};
 use tunnel::{
     find_in_path, install_cloudflared, spawn_output_reader, wait_for_localhost_run_url,
     wait_for_public_url, TunnelProvider,
@@ -522,61 +526,6 @@ impl RemoteAccessManager {
     }
 }
 
-fn validate_invite(share: &ActiveShare, invite_hash: &str) -> Result<(), RemoteError> {
-    if share.invite_hash != invite_hash {
-        return Err(RemoteError::InvalidInvite);
-    }
-    if share.invite_used {
-        return Err(RemoteError::InviteUsed);
-    }
-    if Utc::now() > share.invite_expires_at {
-        return Err(RemoteError::InviteExpired);
-    }
-    Ok(())
-}
-
-fn build_connect_url(base: &str, backend_url: &str, invite_token: &str) -> String {
-    let trimmed = base.trim_end_matches('/');
-    let separator = if trimmed.contains('?') { '&' } else { '?' };
-    let target = obfuscate_backend_target(backend_url, invite_token);
-    format!("{trimmed}{separator}target={target}&invite={invite_token}",)
-}
-
-fn obfuscate_backend_target(backend_url: &str, invite_token: &str) -> String {
-    use rand::Rng;
-
-    let invite_key = parse_hex_or_bytes(invite_token);
-    if invite_key.is_empty() {
-        return String::new();
-    }
-
-    let mut rng = rand::thread_rng();
-    let nonce: [u8; 8] = rng.gen();
-    let plain = backend_url.as_bytes();
-    let mut cipher = Vec::with_capacity(plain.len());
-
-    for (i, byte) in plain.iter().enumerate() {
-        let key = stream_key_byte(i, &invite_key, &nonce);
-        cipher.push(byte ^ key);
-    }
-
-    format!("{}.{}", hex::encode(nonce), hex::encode(cipher))
-}
-
-fn parse_hex_or_bytes(input: &str) -> Vec<u8> {
-    if input.len().is_multiple_of(2) && input.chars().all(|c| c.is_ascii_hexdigit()) {
-        hex::decode(input).unwrap_or_else(|_| input.as_bytes().to_vec())
-    } else {
-        input.as_bytes().to_vec()
-    }
-}
-
-fn stream_key_byte(index: usize, invite_key: &[u8], nonce: &[u8]) -> u8 {
-    let invite = invite_key[index % invite_key.len()];
-    let salt = nonce[index % nonce.len()];
-    invite ^ salt ^ (index as u8).wrapping_mul(31)
-}
-
 fn load_or_create_host_id(paths: &ConfigPaths) -> Result<String, anyhow::Error> {
     let path = paths.host_id_path();
     if let Ok(existing) = std::fs::read_to_string(&path) {
@@ -637,6 +586,16 @@ mod tests {
     }
 
     #[test]
+    fn build_connect_url_trims_trailing_slash() {
+        let url = build_connect_url(
+            "https://app.example.com/connect/",
+            "https://backend.com",
+            "abc123",
+        );
+        assert!(url.starts_with("https://app.example.com/connect?"));
+    }
+
+    #[test]
     fn obfuscate_backend_target_non_empty() {
         let result = obfuscate_backend_target("https://backend.com", "aabbccdd");
         assert!(!result.is_empty());
@@ -656,12 +615,27 @@ mod tests {
     }
 
     #[test]
+    fn parse_hex_or_bytes_odd_hex_like_falls_back_to_bytes() {
+        let result = parse_hex_or_bytes("abc");
+        assert_eq!(result, b"abc");
+    }
+
+    #[test]
     fn stream_key_byte_deterministic() {
         let key = vec![0x01, 0x02];
         let nonce = vec![0x03, 0x04];
         let a = stream_key_byte(0, &key, &nonce);
         let b = stream_key_byte(0, &key, &nonce);
         assert_eq!(a, b);
+    }
+
+    #[test]
+    fn stream_key_byte_wraps_index_over_key_and_nonce() {
+        let key = vec![0x10, 0x20];
+        let nonce = vec![0x01, 0x02];
+        let first = stream_key_byte(0, &key, &nonce);
+        let wrapped = stream_key_byte(2, &key, &nonce);
+        assert_ne!(first, wrapped);
     }
 
     #[test]
@@ -769,5 +743,13 @@ mod tests {
             RemoteError::ProviderFailed("test".to_string()).to_string(),
             "No tunnel provider available: test"
         );
+    }
+
+    #[test]
+    fn obfuscate_backend_target_empty_invite_token_returns_empty() {
+        // When parse_hex_or_bytes returns an empty vec (empty token string),
+        // obfuscate_backend_target must return an empty String rather than panic.
+        let result = obfuscate_backend_target("https://backend.com", "");
+        assert!(result.is_empty());
     }
 }

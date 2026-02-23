@@ -74,6 +74,7 @@ impl ApiError {
     }
 }
 
+#[derive(Debug)]
 pub struct ApiErrorResponse {
     pub status: StatusCode,
     pub error: ApiError,
@@ -195,5 +196,29 @@ mod tests {
     fn api_error_response_from_tuple() {
         let resp = ApiErrorResponse::from((StatusCode::NOT_FOUND, ApiError::not_found("Item")));
         assert_eq!(resp.status, StatusCode::NOT_FOUND);
+    }
+
+    #[test]
+    fn fs_error_file_too_large_maps_to_payload_too_large() {
+        let err = lw_fs::FsError::FileTooLarge {
+            size: 200,
+            max: 100,
+        };
+        let (status, api_err) = ApiError::fs_error(&err);
+        assert_eq!(status, axum::http::StatusCode::PAYLOAD_TOO_LARGE);
+        assert_eq!(api_err.code, "FS_FILE_TOO_LARGE");
+        assert!(api_err.message.contains("200"));
+    }
+
+    #[test]
+    fn fs_error_io_maps_to_internal_server_error() {
+        let err = lw_fs::FsError::Io(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "denied",
+        ));
+        let (status, api_err) = ApiError::fs_error(&err);
+        assert_eq!(status, axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(api_err.code, "FS_IO_ERROR");
+        assert!(api_err.message.contains("denied"));
     }
 }

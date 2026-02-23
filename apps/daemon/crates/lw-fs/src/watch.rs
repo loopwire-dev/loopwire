@@ -273,6 +273,42 @@ mod tests {
         let _watcher = FsWatcher::default();
     }
 
+    #[tokio::test]
+    async fn watch_relative_path_subscribes_successfully() {
+        // Exercises the workspace_root.join(relative_path) branch (relative_path != ".")
+        let dir = TempDir::new().unwrap();
+        let sub = dir.path().join("sub");
+        fs::create_dir_all(&sub).unwrap();
+        fs::write(sub.join("seed.txt"), "seed").unwrap();
+
+        let watcher = FsWatcher::new();
+        let id = Uuid::new_v4();
+        let _rx = watcher.watch(id, dir.path(), "sub").await.unwrap();
+        assert_eq!(watcher.watches.read().await.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn watch_rename_event() {
+        let dir = TempDir::new().unwrap();
+        let src = dir.path().join("before.txt");
+        let dst = dir.path().join("after.txt");
+        fs::write(&src, "data").unwrap();
+
+        let watcher = FsWatcher::new();
+        let id = Uuid::new_v4();
+        let mut rx = watcher.watch(id, dir.path(), ".").await.unwrap();
+        sleep(Duration::from_millis(200)).await;
+
+        fs::rename(&src, &dst).unwrap();
+
+        // Accept any received event; rename may be reported as multiple kinds.
+        let got_event = matches!(
+            tokio::time::timeout(Duration::from_secs(3), rx.recv()).await,
+            Ok(Ok(_))
+        );
+        assert!(got_event, "expected at least one fs event for rename");
+    }
+
     #[test]
     fn fs_event_kind_serialization() {
         assert_eq!(

@@ -1,5 +1,5 @@
 import type { AgentActivity } from "../../stores/app-store";
-import { type WsEnvelope, wsClient } from "../ws";
+import { type WsEnvelope, wsClient } from "../network/ws";
 
 export interface AgentActivityEventPayload {
 	session_id: string;

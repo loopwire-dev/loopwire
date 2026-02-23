@@ -249,4 +249,50 @@ mod tests {
         assert_eq!(slice.end_offset, 8);
         assert!(!slice.has_more);
     }
+
+    #[test]
+    fn snapshot_chunked_returns_empty_when_max_chunk_bytes_is_zero() {
+        let mut history = OutputHistory::new(1024);
+        history.push(b"data");
+        let chunks = history.snapshot_chunked(0);
+        assert!(chunks.is_empty());
+    }
+
+    #[test]
+    fn snapshot_chunked_returns_empty_when_history_is_empty() {
+        let history = OutputHistory::new(1024);
+        let chunks = history.snapshot_chunked(16);
+        assert!(chunks.is_empty());
+    }
+
+    #[test]
+    fn slice_before_returns_empty_when_max_bytes_is_zero() {
+        let mut history = OutputHistory::new(1024);
+        history.push(b"hello");
+        let slice = history.slice_before(None, 0);
+        assert!(slice.data.is_empty());
+        assert!(!slice.has_more);
+    }
+
+    #[test]
+    fn slice_before_returns_empty_when_history_is_empty() {
+        let history = OutputHistory::new(1024);
+        let slice = history.slice_before(None, 100);
+        assert!(slice.data.is_empty());
+        assert!(!slice.has_more);
+    }
+
+    #[test]
+    fn slice_before_offset_before_retained_window_returns_empty() {
+        // Push enough data to cause eviction so retained_start > 0.
+        let mut history = OutputHistory::new(8);
+        history.push(b"aaaa"); // 4 bytes
+        history.push(b"bbbb"); // 8 total
+        history.push(b"cccc"); // 12 > 8 → evict "aaaa", retain "bbbbcccc", start=4
+
+        // Request data before the retained window (before_offset=2 < retained_start=4)
+        let slice = history.slice_before(Some(2), 4);
+        assert!(slice.data.is_empty());
+        assert!(!slice.has_more);
+    }
 }

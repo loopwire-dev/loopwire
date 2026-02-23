@@ -96,4 +96,18 @@ mod tests {
             assert!(!ip.is_loopback());
         }
     }
+    #[tokio::test]
+    async fn health_handler_returns_ok_status() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = lw_config::DaemonConfig::default();
+        config.set_paths(lw_config::ConfigPaths::with_base(dir.path().to_path_buf()));
+        let hash = crate::auth::TokenStore::hash_token("test");
+        let state = crate::state::AppState::new(config, hash).unwrap();
+
+        let Json(resp) = health(State(state)).await;
+        assert_eq!(resp.status, "ok");
+        assert!(!resp.version.is_empty());
+        assert!(!resp.os.is_empty());
+        assert!(!resp.arch.is_empty());
+    }
 }

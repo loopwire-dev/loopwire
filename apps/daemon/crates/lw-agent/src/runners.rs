@@ -51,8 +51,12 @@ pub trait AgentRunner: Send + Sync {
 }
 
 pub fn detect_version_from_command(binary: &str, args: &[&str]) -> Option<String> {
-    std::process::Command::new(binary)
-        .args(args)
+    let full_cmd = std::iter::once(binary)
+        .chain(args.iter().copied())
+        .collect::<Vec<_>>()
+        .join(" ");
+    std::process::Command::new("sh")
+        .args(["-lc", &full_cmd])
         .output()
         .ok()
         .filter(|o| o.status.success())
@@ -61,8 +65,10 @@ pub fn detect_version_from_command(binary: &str, args: &[&str]) -> Option<String
 }
 
 pub fn is_command_available(binary: &str) -> bool {
-    std::process::Command::new("which")
-        .arg(binary)
+    // Use a login shell so user PATH additions (nvm, npm globals, homebrew, etc.)
+    // are respected. `command -v` is POSIX-safe and avoids spawning a subshell.
+    std::process::Command::new("sh")
+        .args(["-lc", &format!("command -v -- {binary}")])
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false)
@@ -284,5 +290,23 @@ mod tests {
         assert_eq!(runners.len(), 3);
         let types: HashSet<AgentType> = runners.iter().map(|r| r.agent_type()).collect();
         assert_eq!(types.len(), 3);
+    }
+
+    // ── Macro-generated is_installed / detect_version ─────────────────
+    // These tests just invoke the trait methods; we don't assert specific
+    // values because the result depends on what's installed in the environment.
+
+    #[test]
+    fn runner_is_installed_does_not_panic() {
+        let _ = ClaudeCodeRunner.is_installed();
+        let _ = CodexRunner.is_installed();
+        let _ = GeminiRunner.is_installed();
+    }
+
+    #[test]
+    fn runner_detect_version_does_not_panic() {
+        let _ = ClaudeCodeRunner.detect_version();
+        let _ = CodexRunner.detect_version();
+        let _ = GeminiRunner.detect_version();
     }
 }

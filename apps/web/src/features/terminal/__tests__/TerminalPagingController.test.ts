@@ -4,7 +4,7 @@ import {
 	TerminalPagingController,
 	binaryStringToBytes,
 	inputStringToBytes,
-} from "../TerminalPagingController";
+} from "../channel/TerminalPagingController";
 
 // Minimal XTerm mock
 function createMockTerminal(autoCallback = true) {

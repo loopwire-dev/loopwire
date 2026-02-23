@@ -134,7 +134,7 @@ label[for],
 	}
 	18% {
 		transform: translate(-50%, -50%) translate3d(0, 0, 0) scale(0.44);
-		opacity: 0.95;
+		opacity: 1;
 	}
 	72% {
 		transform: translate(-50%, -50%) translate3d(var(--x), var(--y), 0) scale(1);
@@ -142,7 +142,7 @@ label[for],
 	}
 	86% {
 		transform: translate(-50%, -50%) translate3d(var(--x), var(--y), 0) scale(1);
-		opacity: 0.88;
+		opacity: 1;
 	}
 	100% {
 		transform: translate(-50%, -50%) translate3d(var(--x), var(--y), 0)
@@ -167,8 +167,6 @@ label[for],
 	height: var(--dot-size);
 	border-radius: 999px;
 	background: var(--color-accent);
-	box-shadow: 0 0 0.5px 0.1px rgb(255 255 255 / 0.9) inset, 0 0 7px
-		rgb(15 133 119 / 0.48), 0 0 16px rgb(15 133 119 / 0.3);
 	transform: translate(-50%, -50%);
 	opacity: 0;
 	animation: lw-spinner-dot 2.5s cubic-bezier(0.12, 0.9, 0.18, 1) infinite;

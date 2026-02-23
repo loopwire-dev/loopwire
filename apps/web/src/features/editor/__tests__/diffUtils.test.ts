@@ -3,7 +3,7 @@ import {
 	parseHunkHeader,
 	parseUnifiedPatch,
 	stripDiffPath,
-} from "../diffUtils";
+} from "../lib/diffUtils";
 
 // ── stripDiffPath ────────────────────────────────────────────────────
 
