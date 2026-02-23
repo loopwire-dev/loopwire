@@ -37,13 +37,18 @@ function CopyButton({ text }: { text: string }) {
 interface LandingPageProps {
 	discoveryEnabled: boolean;
 	onEnableDiscovery: () => void;
+	arrivedViaTokenLink?: boolean;
 }
 
 export function LandingPage({
 	discoveryEnabled,
 	onEnableDiscovery,
+	arrivedViaTokenLink = false,
 }: LandingPageProps) {
 	const { resolvedTheme, setTheme } = useTheme();
+	const selectedStep = discoveryEnabled || arrivedViaTokenLink ? 2 : 1;
+	const setupSelected = selectedStep === 1;
+	const scanSelected = selectedStep === 2;
 
 	const searchLabel = discoveryEnabled
 		? "Scanning for machine..."
@@ -103,12 +108,31 @@ export function LandingPage({
 						{/* Workflow card */}
 						<div className="w-full max-w-lg rounded-2xl border border-border bg-surface-raised overflow-hidden text-left shadow-sm">
 							{/* Step 1: Setup */}
-							<div className="p-5 sm:p-6 border-b border-border">
+							<div
+								className={[
+									"p-5 sm:p-6 border-b transition-colors",
+									setupSelected
+										? "border-accent/30 bg-accent/5"
+										: "border-border",
+								].join(" ")}
+							>
 								<div className="flex items-center gap-3 mb-4">
-									<div className="w-6 h-6 rounded-full bg-surface-overlay text-muted flex items-center justify-center text-[11px] font-bold border border-border shrink-0">
+									<div
+										className={[
+											"w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold border shrink-0",
+											setupSelected
+												? "bg-accent text-accent-foreground border-accent"
+												: "bg-surface-overlay text-muted border-border",
+										].join(" ")}
+									>
 										1
 									</div>
-									<h2 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-foreground">
+									<h2
+										className={[
+											"text-xs sm:text-sm font-bold uppercase tracking-wider",
+											setupSelected ? "text-foreground" : "text-muted",
+										].join(" ")}
+									>
 										Set up your machine
 									</h2>
 								</div>
@@ -126,12 +150,29 @@ export function LandingPage({
 							</div>
 
 							{/* Step 2: Search */}
-							<div className="p-5 sm:p-6">
+							<div
+								className={[
+									"p-5 sm:p-6 transition-colors",
+									scanSelected ? "bg-accent/5" : "",
+								].join(" ")}
+							>
 								<div className="flex items-center gap-3 mb-5">
-									<div className="w-6 h-6 rounded-full bg-surface-overlay text-muted flex items-center justify-center text-[11px] font-bold border border-border shrink-0">
+									<div
+										className={[
+											"w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold border shrink-0",
+											scanSelected
+												? "bg-accent text-accent-foreground border-accent"
+												: "bg-surface-overlay text-muted border-border",
+										].join(" ")}
+									>
 										2
 									</div>
-									<h2 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-foreground">
+									<h2
+										className={[
+											"text-xs sm:text-sm font-bold uppercase tracking-wider",
+											scanSelected ? "text-foreground" : "text-muted",
+										].join(" ")}
+									>
 										Find it on your network
 									</h2>
 								</div>
