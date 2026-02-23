@@ -343,7 +343,13 @@ export interface AppState {
 
 export const useAppStore = create<AppState>((set) => ({
 	token: localStorage.getItem(TOKEN_KEY),
-	exchangingToken: new URLSearchParams(window.location.search).has("token"),
+	exchangingToken: (() => {
+		if (new URLSearchParams(window.location.search).has("token")) return true;
+		const hash = window.location.hash || "";
+		const queryIndex = hash.indexOf("?");
+		if (queryIndex === -1) return false;
+		return new URLSearchParams(hash.slice(queryIndex + 1)).has("token");
+	})(),
 	setExchangingToken: (v) => set({ exchangingToken: v }),
 	setToken: (token) => {
 		localStorage.setItem(TOKEN_KEY, token);

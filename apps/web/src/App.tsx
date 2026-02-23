@@ -8,28 +8,40 @@ import {
 	isManualDiscoveryEnabled,
 } from "./shared/lib/config";
 
-export function App() {
-	// Initialize auth — handles URL token extraction
-	useAuth();
+function hasBootstrapTokenInUrl(): boolean {
+	if (new URLSearchParams(window.location.search).has("token")) return true;
+	const hash = window.location.hash || "";
+	const queryIndex = hash.indexOf("?");
+	if (queryIndex === -1) return false;
+	return new URLSearchParams(hash.slice(queryIndex + 1)).has("token");
+}
 
+export function App() {
+	const arrivedViaTokenLink = hasBootstrapTokenInUrl();
 	const [manualDiscoveryEnabled, setManualDiscoveryEnabled] = useState(
 		isManualDiscoveryEnabled,
 	);
 	const daemonAvailable = useDaemonAvailable({
 		allowDiscovery: manualDiscoveryEnabled,
 	});
+	const pathname = window.location.pathname;
+	const isAuthRoute = pathname === "/auth" || pathname === "/connect";
+
+	// Initialize auth — handles URL token extraction.
+	useAuth({ daemonAvailable });
 
 	const handleEnableDiscovery = () => {
 		enableManualDiscovery();
 		setManualDiscoveryEnabled(true);
 	};
 
-	// Show landing page when no daemon is reachable and no explicit backend is configured
-	if (daemonAvailable === false) {
+	// Show landing page only for app routes when daemon is unreachable.
+	if (daemonAvailable === false && !isAuthRoute) {
 		return (
 			<LandingPage
 				onEnableDiscovery={handleEnableDiscovery}
 				discoveryEnabled={manualDiscoveryEnabled}
+				arrivedViaTokenLink={arrivedViaTokenLink}
 			/>
 		);
 	}
