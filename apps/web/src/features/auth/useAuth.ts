@@ -99,7 +99,8 @@ export function useAuth(options: UseAuthOptions = {}) {
 			!token &&
 			!exchangingToken &&
 			!inConnectFlow &&
-			!bootstrapToken
+			!bootstrapToken &&
+			daemonAvailable === true
 		) {
 			navigate("/auth");
 		}
