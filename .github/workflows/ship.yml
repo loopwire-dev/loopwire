@@ -279,68 +279,17 @@ jobs:
           fi
 
       - name: Deploy to Cloudflare Pages
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_PAGES_PROJECT_NAME: ${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          endpoint="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${CLOUDFLARE_PAGES_PROJECT_NAME}/deployments"
-          ship_sha="${{ needs.prepare.outputs.ship_sha }}"
-
-          echo "Starting Cloudflare Pages deployment via API..."
-          create_response="$(curl -fsSL -X POST "${endpoint}" \
-            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-            -F "branch=main" \
-            -F "commit_dirty=false" \
-            -F "commit_hash=${ship_sha}" \
-            -F "commit_message=ship ${ship_sha}")"
-
-          deployment_id="$(echo "${create_response}" | jq -r '.result.id // empty')"
-          if [[ -z "${deployment_id}" ]]; then
-            echo "Failed to create Pages deployment."
-            echo "${create_response}"
-            exit 1
-          fi
-
-          echo "Created deployment: ${deployment_id}"
-
-          status_endpoint="${endpoint}/${deployment_id}"
-          final_status=""
-          deployment_url=""
-
-          for _ in $(seq 1 60); do
-            status_response="$(curl -fsSL "${status_endpoint}" \
-              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}")"
-            final_status="$(echo "${status_response}" | jq -r '.result.latest_stage.status // empty')"
-            deployment_url="$(echo "${status_response}" | jq -r '.result.url // empty')"
-
-            if [[ "${final_status}" == "success" || "${final_status}" == "skipped" ]]; then
-              break
-            fi
-
-            if [[ "${final_status}" == "failure" || "${final_status}" == "canceled" ]]; then
-              echo "Cloudflare deployment failed with status: ${final_status}"
-              echo "${status_response}"
-              exit 1
-            fi
-
-            sleep 5
-          done
-
-          if [[ "${final_status}" != "success" && "${final_status}" != "skipped" ]]; then
-            echo "Timed out waiting for Cloudflare deployment completion. Last status: ${final_status:-unknown}"
-            exit 1
-          fi
-
-          if [[ -z "${deployment_url}" ]]; then
-            echo "Deployment completed but no URL was returned."
-            exit 1
-          fi
-
-          echo "Cloudflare deployment status: ${final_status}"
-          echo "Cloudflare deployment URL: ${deployment_url}"
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/web
+          command: >-
+            pages deploy dist
+            --project-name "${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME }}"
+            --branch main
+            --commit-hash "${{ needs.prepare.outputs.ship_sha }}"
+            --commit-message "ship ${{ needs.prepare.outputs.ship_sha }}"
 
   build-daemon:
     name: Build Daemon (${{ matrix.target }})
