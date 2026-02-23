@@ -1,6 +1,6 @@
 import { Sun } from "lucide-react";
 import { useTheme } from "next-themes";
-import { type Theme, getNextTheme } from "../lib/theme";
+import { type Theme, getNextTheme } from "../lib/runtime/theme";
 
 export function ThemeToggle() {
 	const { theme, setTheme } = useTheme();

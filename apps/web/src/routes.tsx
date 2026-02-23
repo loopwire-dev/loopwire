@@ -1,7 +1,7 @@
 import { Route, Routes } from "react-router-dom";
-import { AuthGuard } from "./features/auth/AuthGuard";
-import { AuthPage } from "./features/auth/AuthPage";
-import { ConnectPage } from "./features/auth/ConnectPage";
+import { AuthGuard } from "./features/auth/components/AuthGuard";
+import { AuthPage } from "./features/auth/components/AuthPage";
+import { ConnectPage } from "./features/auth/components/ConnectPage";
 import { AppLayout } from "./shared/layout/AppLayout";
 
 export function AppRoutes() {

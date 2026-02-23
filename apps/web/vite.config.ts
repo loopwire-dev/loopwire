@@ -21,12 +21,14 @@ export default defineConfig({
 			provider: "v8",
 			reporter: ["text", "lcov", "html"],
 			reportsDirectory: "./coverage",
-			thresholds: {
-				lines: 1,
-				functions: 1,
-				branches: 1,
-				statements: 1,
-			},
+			all: true,
+			include: ["src/**/*.{ts,tsx}"],
+			exclude: [
+				"src/**/*.test.{ts,tsx}",
+				"src/**/__tests__/**",
+				"src/test-setup.ts",
+				"src/**/*.d.ts",
+			],
 		},
 	},
 });

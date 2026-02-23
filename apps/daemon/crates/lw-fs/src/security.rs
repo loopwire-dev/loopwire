@@ -345,4 +345,102 @@ mod tests {
     fn default_creates_new() {
         let _registry = WorkspaceRegistry::default();
     }
+
+    // ── with_entries ──────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn with_entries_pre_populates_registry() {
+        let dir = TempDir::new().unwrap();
+        let id = Uuid::new_v4();
+        let registry = WorkspaceRegistry::with_entries(vec![(id, dir.path().to_path_buf())]);
+
+        let root = registry.get_root(&id).await.unwrap();
+        assert_eq!(root, std::fs::canonicalize(dir.path()).unwrap());
+    }
+
+    #[tokio::test]
+    async fn with_entries_nonexistent_path_stored_as_original() {
+        let id = Uuid::new_v4();
+        let path = std::path::PathBuf::from("/nonexistent/path/that/does/not/exist");
+        let registry = WorkspaceRegistry::with_entries(vec![(id, path.clone())]);
+
+        let root = registry.get_root(&id).await.unwrap();
+        assert_eq!(root, path);
+    }
+
+    #[tokio::test]
+    async fn with_entries_multiple_workspaces() {
+        let dir_a = TempDir::new().unwrap();
+        let dir_b = TempDir::new().unwrap();
+        let id_a = Uuid::new_v4();
+        let id_b = Uuid::new_v4();
+
+        let registry = WorkspaceRegistry::with_entries(vec![
+            (id_a, dir_a.path().to_path_buf()),
+            (id_b, dir_b.path().to_path_buf()),
+        ]);
+
+        let root_a = registry.get_root(&id_a).await.unwrap();
+        let root_b = registry.get_root(&id_b).await.unwrap();
+        assert_eq!(root_a, std::fs::canonicalize(dir_a.path()).unwrap());
+        assert_eq!(root_b, std::fs::canonicalize(dir_b.path()).unwrap());
+    }
+
+    // ── find_by_path ──────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn find_by_path_returns_id_for_registered_workspace() {
+        let dir = TempDir::new().unwrap();
+        let id = Uuid::new_v4();
+        let registry = WorkspaceRegistry::new();
+        registry
+            .register(id, dir.path().to_path_buf())
+            .await
+            .unwrap();
+
+        let canonical = std::fs::canonicalize(dir.path()).unwrap();
+        let found = registry.find_by_path(&canonical).await;
+        assert_eq!(found, Some(id));
+    }
+
+    #[tokio::test]
+    async fn find_by_path_returns_none_for_unregistered_path() {
+        let registry = WorkspaceRegistry::new();
+        let found = registry
+            .find_by_path(std::path::Path::new("/nonexistent"))
+            .await;
+        assert!(found.is_none());
+    }
+
+    #[tokio::test]
+    async fn find_by_path_returns_none_after_unregister() {
+        let dir = TempDir::new().unwrap();
+        let id = Uuid::new_v4();
+        let registry = WorkspaceRegistry::new();
+        registry
+            .register(id, dir.path().to_path_buf())
+            .await
+            .unwrap();
+        registry.unregister(&id).await;
+
+        let canonical = std::fs::canonicalize(dir.path()).unwrap();
+        let found = registry.find_by_path(&canonical).await;
+        assert!(found.is_none());
+    }
+
+    // ── register() fallback for nonexistent path ──────────────────────
+
+    #[tokio::test]
+    async fn register_nonexistent_path_falls_back_to_original() {
+        // When canonicalization fails (path doesn't exist), register() stores
+        // the original path and succeeds rather than returning an error.
+        let registry = WorkspaceRegistry::new();
+        let id = Uuid::new_v4();
+        let path = std::path::PathBuf::from("/nonexistent/path/for/register/test");
+
+        registry.register(id, path.clone()).await.unwrap();
+
+        let stored = registry.get_root(&id).await.unwrap();
+        assert_eq!(stored, path);
+    }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type AgentSession, toWorkspaceSession } from "../useAgent";
+import { type AgentSession, toWorkspaceSession } from "../hooks/useAgent";
 
 describe("toWorkspaceSession", () => {
 	const baseSession: AgentSession = {

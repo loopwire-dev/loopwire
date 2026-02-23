@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { useAuth } from "./features/auth/useAuth";
-import { LandingPage } from "./features/landing/LandingPage";
+import { useAuth } from "./features/auth/hooks/useAuth";
+import { LandingPage } from "./features/landing/components/LandingPage";
 import { AppRoutes } from "./routes";
 import { useDaemonAvailable } from "./shared/hooks/useDaemonAvailable";
 import {
 	enableManualDiscovery,
 	isManualDiscoveryEnabled,
-} from "./shared/lib/config";
+} from "./shared/lib/runtime/config";
 
 function hasBootstrapTokenInUrl(): boolean {
 	if (new URLSearchParams(window.location.search).has("token")) return true;

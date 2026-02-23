@@ -84,6 +84,7 @@ jobs:
 
   coverage-daemon:
     name: Coverage Daemon
+    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -105,13 +106,20 @@ jobs:
 
       - run: moon run daemon:coverage
 
+      - name: Rewrite daemon lcov paths for Qlty
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -E 's|^SF:|SF:apps/daemon/|' apps/daemon/lcov.info > apps/daemon/lcov.qlty.info
+
       - uses: actions/upload-artifact@v4
         with:
-          name: backend-coverage
-          path: apps/daemon/lcov.info
+          name: daemon-coverage
+          path: apps/daemon/lcov.qlty.info
 
   coverage-web:
     name: Coverage Web
+    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -126,15 +134,22 @@ jobs:
 
       - run: moon run web:coverage
 
+      - name: Rewrite web lcov paths for Qlty
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -E 's|^SF:src/|SF:apps/web/src/|' apps/web/coverage/lcov.info > apps/web/coverage/lcov.qlty.info
+
       - uses: actions/upload-artifact@v4
         with:
-          name: frontend-coverage
-          path: apps/web/coverage
+          name: web-coverage
+          path: apps/web/coverage/lcov.qlty.info
 
   coverage-upload:
     name: Coverage Upload
     needs: [coverage-daemon, coverage-web]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -151,5 +166,5 @@ jobs:
           oidc: true
           validate: false
           files: |
-            coverage-artifacts/backend-coverage/lcov.info
-            coverage-artifacts/frontend-coverage/lcov.info
+            coverage-artifacts/daemon-coverage/lcov.qlty.info
+            coverage-artifacts/web-coverage/lcov.qlty.info

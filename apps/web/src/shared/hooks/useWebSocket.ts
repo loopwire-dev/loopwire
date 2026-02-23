@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { onDaemonWsEvent } from "../lib/daemon/ws";
-import type { WsEnvelope } from "../lib/ws";
+import type { WsEnvelope } from "../lib/network/ws";
 
 export function useWebSocket(
 	type: string,

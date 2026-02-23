@@ -1,5 +1,5 @@
 import { useAppStore } from "../../stores/app-store";
-import { getApiBase } from "../config";
+import { getApiBase } from "../runtime/config";
 
 const NON_SESSION_AUTH_CODES = new Set([
 	"INVALID_TOKEN",

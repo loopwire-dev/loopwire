@@ -7,6 +7,23 @@ use uuid::Uuid;
 use super::session::AgentStatus;
 use super::AgentManager;
 
+/// Determines the next status for an agent handle based on whether its
+/// backing process is alive and the handle's current status.
+///
+/// The `Restored` status is intentionally preserved regardless of process
+/// state: promotion to `Running` happens explicitly via
+/// [`AgentManager::transition_restored_to_running`] so that lazy-spawn
+/// placeholders are not prematurely marked `Stopped`.
+fn next_handle_status(process_alive: bool, current_status: AgentStatus) -> AgentStatus {
+    if current_status == AgentStatus::Restored {
+        AgentStatus::Restored
+    } else if process_alive {
+        AgentStatus::Running
+    } else {
+        AgentStatus::Stopped
+    }
+}
+
 impl AgentManager {
     pub(crate) async fn reconcile_session_statuses(&self) {
         let mut handles = self.handles.write().await;
@@ -16,27 +33,13 @@ impl AgentManager {
         for (session_id, handle) in handles.iter_mut() {
             let running_via_process = handle.process_id.is_some_and(is_process_alive);
 
+            handle.status = next_handle_status(running_via_process, handle.status);
+            let is_active =
+                handle.status == AgentStatus::Running || handle.status == AgentStatus::Restored;
+
             match self.pty_manager.get(session_id).await {
                 Ok(session) => {
-                    handle.status = if running_via_process {
-                        if handle.status == AgentStatus::Restored {
-                            AgentStatus::Restored
-                        } else {
-                            AgentStatus::Running
-                        }
-                    } else if handle.status == AgentStatus::Restored {
-                        // Preserve Restored even when a PTY exists in the
-                        // manager but the process already exited (e.g. the
-                        // agent CLI rejected --resume and quit immediately).
-                        // transition_restored_to_running will consume this
-                        // after the handle has been surfaced once.
-                        AgentStatus::Restored
-                    } else {
-                        AgentStatus::Stopped
-                    };
-                    if handle.status == AgentStatus::Running
-                        || handle.status == AgentStatus::Restored
-                    {
+                    if is_active {
                         running_session_ids.insert(*session_id);
                         if !session.is_stopped() {
                             sessions_to_monitor.push((*session_id, session.clone()));
@@ -46,26 +49,7 @@ impl AgentManager {
                     }
                 }
                 Err(_) => {
-                    handle.status = if running_via_process {
-                        if handle.status == AgentStatus::Restored {
-                            AgentStatus::Restored
-                        } else {
-                            AgentStatus::Running
-                        }
-                    } else if handle.status == AgentStatus::Restored {
-                        // Preserve Restored status for handles that have no PTY
-                        // and no live process (e.g. failed restore from persistence).
-                        // They stay Restored so the bootstrap response can surface
-                        // them; transition_restored_to_running will flip them to
-                        // Running after they've been returned once, and the next
-                        // reconcile will then correctly mark them Stopped.
-                        AgentStatus::Restored
-                    } else {
-                        AgentStatus::Stopped
-                    };
-                    if handle.status == AgentStatus::Running
-                        || handle.status == AgentStatus::Restored
-                    {
+                    if is_active {
                         running_session_ids.insert(*session_id);
                     } else {
                         stopped_sessions.push((*session_id, handle.workspace_path.clone()));
@@ -97,5 +81,82 @@ impl AgentManager {
                 )
                 .await;
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Each test expresses the expected behaviour for a (process_alive, current_status)
+    // pair. The `Restored` invariant — stay Restored regardless of process state —
+    // is the most critical rule to verify.
+
+    #[test]
+    fn restored_stays_restored_when_process_alive() {
+        assert_eq!(
+            next_handle_status(true, AgentStatus::Restored),
+            AgentStatus::Restored
+        );
+    }
+
+    #[test]
+    fn restored_stays_restored_when_process_dead() {
+        assert_eq!(
+            next_handle_status(false, AgentStatus::Restored),
+            AgentStatus::Restored
+        );
+    }
+
+    #[test]
+    fn running_stays_running_when_process_alive() {
+        assert_eq!(
+            next_handle_status(true, AgentStatus::Running),
+            AgentStatus::Running
+        );
+    }
+
+    #[test]
+    fn running_becomes_stopped_when_process_dead() {
+        assert_eq!(
+            next_handle_status(false, AgentStatus::Running),
+            AgentStatus::Stopped
+        );
+    }
+
+    #[test]
+    fn stopped_becomes_running_when_process_alive() {
+        assert_eq!(
+            next_handle_status(true, AgentStatus::Stopped),
+            AgentStatus::Running
+        );
+    }
+
+    #[test]
+    fn stopped_stays_stopped_when_process_dead() {
+        assert_eq!(
+            next_handle_status(false, AgentStatus::Stopped),
+            AgentStatus::Stopped
+        );
+    }
+
+    #[test]
+    fn starting_becomes_running_when_process_alive() {
+        assert_eq!(
+            next_handle_status(true, AgentStatus::Starting),
+            AgentStatus::Running
+        );
+    }
+
+    #[test]
+    fn failed_becomes_stopped_when_process_dead() {
+        assert_eq!(
+            next_handle_status(false, AgentStatus::Failed),
+            AgentStatus::Stopped
+        );
     }
 }

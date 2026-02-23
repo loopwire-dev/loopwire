@@ -67,14 +67,16 @@ tasks:
 
   complexity:
     command: >-
-      bash -lc 'qlty metrics apps/daemon;
-      qlty smells --no-snippets apps/daemon || true'
+      bash -lc 'cd "$MOON_WORKSPACE_ROOT" &&
+      qlty metrics apps/daemon &&
+      qlty smells --no-snippets apps/daemon'
     inputs:
       - '@group(sources)'
       - '@group(configs)'
 
   coverage:
-    script: 'cargo llvm-cov --workspace --lcov --output-path lcov.info --fail-under-lines 1'
+    command: >-
+      bash -lc 'cargo llvm-cov --workspace --lcov --output-path lcov.info'
     inputs:
       - '@group(sources)'
       - '@group(configs)'

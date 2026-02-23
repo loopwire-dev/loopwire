@@ -203,14 +203,23 @@ run_with_sudo() {
   fi
 }
 
+files_differ() {
+  # Returns 0 (true) if the two files differ; 1 if they are identical or both absent.
+  local a="$1" b="$2"
+  [ -f "$a" ] && [ -f "$b" ] || return 0   # missing => treat as different
+  ! cmp -s "$a" "$b"
+}
+
 register_autostart_macos() {
   local binary_path="$1"
   local plist_dir="$HOME/Library/LaunchAgents"
   local plist_path="$plist_dir/dev.loopwire.loopwired.plist"
+  local tmp_plist
+  tmp_plist="$(mktemp)"
 
   mkdir -p "$plist_dir"
 
-  cat > "$plist_path" <<EOF
+  cat > "$tmp_plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -220,7 +229,7 @@ register_autostart_macos() {
   <key>ProgramArguments</key>
   <array>
     <string>${binary_path}</string>
-    <string>start</string>
+    <string>run</string>
   </array>
   <key>EnvironmentVariables</key>
   <dict>
@@ -230,7 +239,10 @@ register_autostart_macos() {
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>
-  <true/>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
   <key>StandardOutPath</key>
   <string>${HOME}/.loopwire/loopwired.out.log</string>
   <key>StandardErrorPath</key>
@@ -241,30 +253,46 @@ EOF
 
   mkdir -p "$HOME/.loopwire"
 
-  # Reload agent if already loaded
-  if launchctl list | grep -q "dev.loopwire.loopwired"; then
-    launchctl unload "$plist_path" >/dev/null 2>&1 || true
+  if ! files_differ "$tmp_plist" "$plist_path"; then
+    rm -f "$tmp_plist"
+    REGISTER_RESULT="unchanged"
+    return
   fi
+
+  local was_installed=0
+  [ -f "$plist_path" ] && was_installed=1
+
+  mv "$tmp_plist" "$plist_path"
+
+  # Unload existing agent before loading updated config
+  launchctl unload "$plist_path" >/dev/null 2>&1 || true
 
   launchctl load -w "$plist_path" >/dev/null 2>&1 || true
   launchctl kickstart -k "gui/$(id -u)/dev.loopwire.loopwired" >/dev/null 2>&1 || true
 
-  :
+  if [ "$was_installed" -eq 1 ]; then
+    REGISTER_RESULT="updated"
+  else
+    REGISTER_RESULT="enabled"
+  fi
 }
 
 register_autostart_linux() {
   local binary_path="$1"
   local unit_dir="$HOME/.config/systemd/user"
   local unit_path="$unit_dir/${AUTOSTART_NAME}.service"
+  local tmp_unit
+  tmp_unit="$(mktemp)"
 
   if ! command -v systemctl >/dev/null 2>&1; then
     echo "systemctl not found; skipping auto-start registration."
+    REGISTER_RESULT="unchanged"
     return
   fi
 
   mkdir -p "$unit_dir"
 
-  cat > "$unit_path" <<EOF
+  cat > "$tmp_unit" <<EOF
 [Unit]
 Description=Loopwire daemon
 After=network-online.target
@@ -272,30 +300,47 @@ After=network-online.target
 [Service]
 Type=simple
 Environment=LOOPWIRE_FRONTEND_URL=${FRONTEND_URL}
-ExecStart=${binary_path} start
-Restart=always
+ExecStart=${binary_path} run
+Restart=on-failure
 RestartSec=3
 
 [Install]
 WantedBy=default.target
 EOF
 
+  if ! files_differ "$tmp_unit" "$unit_path"; then
+    rm -f "$tmp_unit"
+    REGISTER_RESULT="unchanged"
+    return
+  fi
+
+  local was_installed=0
+  [ -f "$unit_path" ] && was_installed=1
+
+  mv "$tmp_unit" "$unit_path"
   systemctl --user daemon-reload
   systemctl --user enable --now "${AUTOSTART_NAME}.service" >/dev/null 2>&1 || {
     echo "Could not enable user service automatically."
     echo "Try manually:"
     echo "  systemctl --user daemon-reload"
     echo "  systemctl --user enable --now ${AUTOSTART_NAME}.service"
+    REGISTER_RESULT="unchanged"
     return
   }
 
-  :
+  if [ "$was_installed" -eq 1 ]; then
+    REGISTER_RESULT="updated"
+  else
+    REGISTER_RESULT="enabled"
+  fi
 }
 
 install_autoupdate_script() {
   local updater_path="${INSTALL_DIR}/loopwire-autoupdate"
+  local tmp_updater
+  tmp_updater="$(mktemp)"
 
-  cat > "$updater_path" <<'EOF'
+  cat > "$tmp_updater" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -361,7 +406,7 @@ restart_daemon() {
   fi
 
   "${INSTALL_DIR}/${BINARY_NAME}" stop >/dev/null 2>&1 || true
-  LOOPWIRE_FRONTEND_URL="${FRONTEND_URL}" "${INSTALL_DIR}/${BINARY_NAME}" start >/dev/null 2>&1 || true
+  LOOPWIRE_FRONTEND_URL="${FRONTEND_URL}" "${INSTALL_DIR}/${BINARY_NAME}" run >/dev/null 2>&1 || true
 }
 
 PLATFORM="$(detect_platform)"
@@ -395,18 +440,24 @@ mv "${TMP_PATH}" "${INSTALLED_PATH}"
 restart_daemon
 EOF
 
-  chmod +x "$updater_path"
-  :
+  if files_differ "$tmp_updater" "$updater_path"; then
+    mv "$tmp_updater" "$updater_path"
+    chmod +x "$updater_path"
+  else
+    rm -f "$tmp_updater"
+  fi
 }
 
 register_autoupdate_macos() {
   local updater_path="$1"
   local plist_dir="$HOME/Library/LaunchAgents"
   local plist_path="$plist_dir/dev.loopwire.loopwired.autoupdate.plist"
+  local tmp_plist
+  tmp_plist="$(mktemp)"
 
   mkdir -p "$plist_dir"
 
-  cat > "$plist_path" <<EOF
+  cat > "$tmp_plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -429,12 +480,27 @@ register_autoupdate_macos() {
 </plist>
 EOF
 
-  if launchctl list | grep -q "dev.loopwire.loopwired.autoupdate"; then
-    launchctl unload "$plist_path" >/dev/null 2>&1 || true
+  if ! files_differ "$tmp_plist" "$plist_path"; then
+    rm -f "$tmp_plist"
+    REGISTER_RESULT="unchanged"
+    return
   fi
 
+  local was_installed=0
+  [ -f "$plist_path" ] && was_installed=1
+
+  mv "$tmp_plist" "$plist_path"
+
+  # Unload existing agent before loading updated config
+  launchctl unload "$plist_path" >/dev/null 2>&1 || true
+
   launchctl load -w "$plist_path" >/dev/null 2>&1 || true
-  :
+
+  if [ "$was_installed" -eq 1 ]; then
+    REGISTER_RESULT="updated"
+  else
+    REGISTER_RESULT="enabled"
+  fi
 }
 
 register_autoupdate_linux() {
@@ -442,15 +508,20 @@ register_autoupdate_linux() {
   local unit_dir="$HOME/.config/systemd/user"
   local service_path="$unit_dir/${AUTOUPDATE_NAME}.service"
   local timer_path="$unit_dir/${AUTOUPDATE_NAME}.timer"
+  local tmp_service tmp_timer
+  tmp_service="$(mktemp)"
+  tmp_timer="$(mktemp)"
 
   if ! command -v systemctl >/dev/null 2>&1; then
     echo "systemctl not found; skipping auto-update registration."
+    rm -f "$tmp_service" "$tmp_timer"
+    REGISTER_RESULT="unchanged"
     return
   fi
 
   mkdir -p "$unit_dir"
 
-  cat > "$service_path" <<EOF
+  cat > "$tmp_service" <<EOF
 [Unit]
 Description=Loopwire daemon auto-update
 
@@ -459,7 +530,7 @@ Type=oneshot
 ExecStart=${updater_path}
 EOF
 
-  cat > "$timer_path" <<EOF
+  cat > "$tmp_timer" <<EOF
 [Unit]
 Description=Run Loopwire daemon auto-update daily
 
@@ -472,16 +543,44 @@ Persistent=true
 WantedBy=timers.target
 EOF
 
+  local any_changed=0
+  if files_differ "$tmp_service" "$service_path"; then
+    mv "$tmp_service" "$service_path"
+    any_changed=1
+  else
+    rm -f "$tmp_service"
+  fi
+
+  if files_differ "$tmp_timer" "$timer_path"; then
+    mv "$tmp_timer" "$timer_path"
+    any_changed=1
+  else
+    rm -f "$tmp_timer"
+  fi
+
+  if [ "$any_changed" -eq 0 ]; then
+    REGISTER_RESULT="unchanged"
+    return
+  fi
+
+  local was_installed=0
+  [ -f "$timer_path" ] && was_installed=1
+
   systemctl --user daemon-reload
   systemctl --user enable --now "${AUTOUPDATE_NAME}.timer" >/dev/null 2>&1 || {
     echo "Could not enable auto-update timer automatically."
     echo "Try manually:"
     echo "  systemctl --user daemon-reload"
     echo "  systemctl --user enable --now ${AUTOUPDATE_NAME}.timer"
+    REGISTER_RESULT="unchanged"
     return
   }
 
-  :
+  if [ "$was_installed" -eq 1 ]; then
+    REGISTER_RESULT="updated"
+  else
+    REGISTER_RESULT="enabled"
+  fi
 }
 
 is_autostart_enabled() {
@@ -684,15 +783,13 @@ if [ "$DRY_RUN" -eq 1 ]; then
   echo "📝 Open app with one-click token URL."
   log_section "✅ Success"
   log_ok "Dry-run complete."
-  echo "🌐 Open: $(build_tokenized_url "${FRONTEND_URL}" "<bootstrap-token>")"
+  echo "🌍 Open: $(build_tokenized_url "${FRONTEND_URL}" "<bootstrap-token>")"
   exit 0
 fi
 
 log_section "📦 Install"
 if [ -f "${INSTALL_DIR}/${BINARY_NAME}" ]; then
   log_step "Checking loopwired version..."
-else
-  log_step "Installing loopwired..."
 fi
 mkdir -p "$INSTALL_DIR"
 CHECKSUMS="$(curl -sL "$CHECKSUM_URL")"
@@ -726,7 +823,7 @@ if [ "${SKIP_BINARY_INSTALL}" -eq 0 ]; then
     exit 1
   fi
 
-  # Set permissions
+  log_step "Installing loopwired..."
   chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
   BINARY_CHANGED=1
 else
@@ -757,56 +854,106 @@ fi
 # Ensure install dir is on PATH for this session
 export PATH="${INSTALL_DIR}:$PATH"
 
+# Persist frontend_url in config.toml so manual `loopwired start` works without the env var.
+# Both frontend_url (top-level) and remote.frontend_connect_url must be non-empty for the
+# daemon to pass validation when LOOPWIRE_FRONTEND_URL is not set in the environment.
+CONFIG_TOML="${HOME}/.loopwire/config.toml"
+CONNECT_URL="${FRONTEND_URL%/}/connect"
+mkdir -p "${HOME}/.loopwire"
+if [ ! -f "$CONFIG_TOML" ]; then
+  printf 'frontend_url = "%s"\n\n[remote]\nfrontend_connect_url = "%s"\n' \
+    "${FRONTEND_URL}" "${CONNECT_URL}" > "$CONFIG_TOML"
+else
+  # Update (or add) both fields in-place using awk to correctly handle TOML sections.
+  local_tmp="$(mktemp)"
+  awk -v url="${FRONTEND_URL}" -v connect_url="${CONNECT_URL}" '
+    BEGIN { in_remote=0; wrote_url=0; wrote_connect=0 }
+    /^\[[^\]]+\]/ {
+      if (in_remote && !wrote_connect) {
+        print "frontend_connect_url = \"" connect_url "\""
+        wrote_connect = 1
+      }
+      in_remote = ($0 == "[remote]")
+      print; next
+    }
+    /^frontend_url[[:space:]]*=/ && !in_remote {
+      print "frontend_url = \"" url "\""
+      wrote_url = 1; next
+    }
+    /^frontend_connect_url[[:space:]]*=/ && in_remote {
+      print "frontend_connect_url = \"" connect_url "\""
+      wrote_connect = 1; next
+    }
+    { print }
+    END {
+      if (in_remote && !wrote_connect) {
+        print "frontend_connect_url = \"" connect_url "\""
+        wrote_connect = 1
+      }
+      if (!wrote_url)    { print "\nfrontend_url = \"" url "\"" }
+      if (!wrote_connect) { print "\n[remote]\nfrontend_connect_url = \"" connect_url "\"" }
+    }
+  ' "$CONFIG_TOML" > "$local_tmp"
+  mv "$local_tmp" "$CONFIG_TOML"
+fi
+
 FULL_BINARY_PATH="${INSTALL_DIR}/${BINARY_NAME}"
 UPDATER_PATH="${INSTALL_DIR}/loopwire-autoupdate"
 log_step "Configuring background services..."
 
+REGISTER_RESULT=""
+
 # Register auto-start based on OS
-if [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]]; then
-  if is_autostart_enabled; then
-    log_ok "Auto-start at login already enabled."
-  else
-    case "$(uname -s)" in
-      Darwin*)
-        register_autostart_macos "$FULL_BINARY_PATH"
-        ;;
-      Linux*)
-        register_autostart_linux "$FULL_BINARY_PATH"
-        ;;
+case "$(uname -s)" in
+  Darwin*)
+    register_autostart_macos "$FULL_BINARY_PATH"
+    case "$REGISTER_RESULT" in
+      enabled)   log_ok "Auto-start at login enabled." ;;
+      updated)   log_ok "Auto-start at login updated." ;;
+      unchanged) log_ok "Auto-start at login already up to date." ;;
+      *)         log_warn "Could not enable auto-start at login." ;;
     esac
-    if is_autostart_enabled; then
-      log_ok "Auto-start at login enabled."
-    else
-      log_warn "Could not enable auto-start at login."
-    fi
-  fi
-else
-  log_warn "Auto-start at login not available on this OS."
-fi
+    ;;
+  Linux*)
+    register_autostart_linux "$FULL_BINARY_PATH"
+    case "$REGISTER_RESULT" in
+      enabled)   log_ok "Auto-start at login enabled." ;;
+      updated)   log_ok "Auto-start at login updated." ;;
+      unchanged) log_ok "Auto-start at login already up to date." ;;
+      *)         log_warn "Could not enable auto-start at login." ;;
+    esac
+    ;;
+  *)
+    log_warn "Auto-start at login not available on this OS."
+    ;;
+esac
 
 # Register auto-update based on OS
-if [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]]; then
-  if is_autoupdate_enabled && [ -x "$UPDATER_PATH" ]; then
-    log_ok "Auto-update already enabled."
-  else
-    install_autoupdate_script
-    case "$(uname -s)" in
-      Darwin*)
-        register_autoupdate_macos "$UPDATER_PATH"
-        ;;
-      Linux*)
-        register_autoupdate_linux "$UPDATER_PATH"
-        ;;
+REGISTER_RESULT=""
+install_autoupdate_script
+case "$(uname -s)" in
+  Darwin*)
+    register_autoupdate_macos "$UPDATER_PATH"
+    case "$REGISTER_RESULT" in
+      enabled)   log_ok "Auto-update enabled." ;;
+      updated)   log_ok "Auto-update updated." ;;
+      unchanged) log_ok "Auto-update already up to date." ;;
+      *)         log_warn "Could not enable auto-update." ;;
     esac
-    if is_autoupdate_enabled; then
-      log_ok "Auto-update enabled."
-    else
-      log_warn "Could not enable auto-update."
-    fi
-  fi
-else
-  log_warn "Auto-update not available on this OS."
-fi
+    ;;
+  Linux*)
+    register_autoupdate_linux "$UPDATER_PATH"
+    case "$REGISTER_RESULT" in
+      enabled)   log_ok "Auto-update enabled." ;;
+      updated)   log_ok "Auto-update updated." ;;
+      unchanged) log_ok "Auto-update already up to date." ;;
+      *)         log_warn "Could not enable auto-update." ;;
+    esac
+    ;;
+  *)
+    log_warn "Auto-update not available on this OS."
+    ;;
+esac
 
 # Start the daemon only when no OS service manager handles startup.
 case "$(uname -s)" in
@@ -818,16 +965,8 @@ case "$(uname -s)" in
       log_ok "loopwired is already running."
     else
       log_step "Starting loopwired..."
-      LOOPWIRE_FRONTEND_URL="${FRONTEND_URL}" "${FULL_BINARY_PATH}" start >/dev/null 2>&1 &
-      DAEMON_PID=$!
-
-      sleep 1
-      if kill -0 "$DAEMON_PID" 2>/dev/null; then
-        log_ok "loopwired is running (PID ${DAEMON_PID})."
-      else
-        log_warn "loopwired may already be managed by your OS service or exited unexpectedly."
-        log_warn "Run 'loopwired status' to verify."
-      fi
+      LOOPWIRE_FRONTEND_URL="${FRONTEND_URL}" "${FULL_BINARY_PATH}" start
+      log_ok "loopwired started."
     fi
     ;;
 esac
@@ -836,7 +975,7 @@ log_section "✅ Success"
 echo "🎉 Loopwire is ready"
 BOOTSTRAP_TOKEN="$(read_bootstrap_token || true)"
 if [ -n "${BOOTSTRAP_TOKEN}" ]; then
-  echo "🌐 Open: $(build_tokenized_url "${FRONTEND_URL}" "${BOOTSTRAP_TOKEN}")"
+  echo "🌍 Open: $(build_tokenized_url "${FRONTEND_URL}" "${BOOTSTRAP_TOKEN}")"
 else
-  echo "🌐 Open: ${FRONTEND_URL}/"
+  echo "🌍 Open: ${FRONTEND_URL}/"
 fi

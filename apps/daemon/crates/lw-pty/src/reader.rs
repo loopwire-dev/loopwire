@@ -154,4 +154,163 @@ mod tests {
             session_id: uuid::Uuid::nil(),
         };
     }
+
+    // ── run_reader_loop tests (via direct call — private but same module) ──
+
+    #[test]
+    fn run_reader_loop_eof_sets_stopped_and_sends_none_exit() {
+        let channels = create_session_channels();
+        let mut exit_rx = channels.exit_tx.subscribe();
+        let ctx = ReaderThreadContext {
+            reader: Box::new(std::io::empty()), // Ok(0) immediately
+            output_tx: channels.output_tx,
+            exit_tx: channels.exit_tx,
+            output_history: channels.output_history,
+            stopped: channels.stopped.clone(),
+            child: None,
+            session_id: uuid::Uuid::nil(),
+        };
+
+        run_reader_loop(ctx);
+
+        assert!(channels.stopped.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(exit_rx.try_recv().unwrap().is_none());
+    }
+
+    #[test]
+    fn run_reader_loop_data_forwarded_to_channel_and_history() {
+        let channels = create_session_channels();
+        let mut output_rx = channels.output_tx.subscribe();
+        let ctx = ReaderThreadContext {
+            reader: Box::new(std::io::Cursor::new(b"hello world".to_vec())),
+            output_tx: channels.output_tx,
+            exit_tx: channels.exit_tx,
+            output_history: channels.output_history.clone(),
+            stopped: channels.stopped.clone(),
+            child: None,
+            session_id: uuid::Uuid::nil(),
+        };
+
+        run_reader_loop(ctx);
+
+        let snapshot = channels.output_history.lock().unwrap().snapshot();
+        assert_eq!(snapshot, b"hello world");
+
+        let received = output_rx.try_recv().unwrap();
+        assert_eq!(received, b"hello world");
+
+        assert!(channels.stopped.load(std::sync::atomic::Ordering::SeqCst));
+    }
+
+    /// A reader that yields a configurable error on the first call,
+    /// then EOF on all subsequent calls.
+    struct ErrorThenEof {
+        kind: std::io::ErrorKind,
+        done: bool,
+    }
+
+    impl std::io::Read for ErrorThenEof {
+        fn read(&mut self, _buf: &mut [u8]) -> std::io::Result<usize> {
+            if !self.done {
+                self.done = true;
+                Err(std::io::Error::from(self.kind))
+            } else {
+                Ok(0)
+            }
+        }
+    }
+
+    #[test]
+    fn run_reader_loop_interrupted_error_is_retried() {
+        // Interrupted is a transient error; the loop must continue and
+        // reach EOF rather than breaking immediately.
+        let channels = create_session_channels();
+        let ctx = ReaderThreadContext {
+            reader: Box::new(ErrorThenEof {
+                kind: std::io::ErrorKind::Interrupted,
+                done: false,
+            }),
+            output_tx: channels.output_tx,
+            exit_tx: channels.exit_tx,
+            output_history: channels.output_history,
+            stopped: channels.stopped.clone(),
+            child: None,
+            session_id: uuid::Uuid::nil(),
+        };
+
+        run_reader_loop(ctx);
+
+        // Must still reach EOF and set stopped.
+        assert!(channels.stopped.load(std::sync::atomic::Ordering::SeqCst));
+    }
+
+    #[test]
+    fn run_reader_loop_would_block_error_is_retried() {
+        let channels = create_session_channels();
+        let ctx = ReaderThreadContext {
+            reader: Box::new(ErrorThenEof {
+                kind: std::io::ErrorKind::WouldBlock,
+                done: false,
+            }),
+            output_tx: channels.output_tx,
+            exit_tx: channels.exit_tx,
+            output_history: channels.output_history,
+            stopped: channels.stopped.clone(),
+            child: None,
+            session_id: uuid::Uuid::nil(),
+        };
+
+        run_reader_loop(ctx);
+
+        assert!(channels.stopped.load(std::sync::atomic::Ordering::SeqCst));
+    }
+
+    #[test]
+    fn run_reader_loop_other_error_without_child_breaks_immediately() {
+        // A non-transient error with child=None causes the loop to break.
+        let channels = create_session_channels();
+        let mut exit_rx = channels.exit_tx.subscribe();
+        let ctx = ReaderThreadContext {
+            reader: Box::new(ErrorThenEof {
+                kind: std::io::ErrorKind::BrokenPipe,
+                done: false,
+            }),
+            output_tx: channels.output_tx,
+            exit_tx: channels.exit_tx,
+            output_history: channels.output_history,
+            stopped: channels.stopped.clone(),
+            child: None,
+            session_id: uuid::Uuid::nil(),
+        };
+
+        run_reader_loop(ctx);
+
+        // Should have stopped and sent None exit code.
+        assert!(channels.stopped.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(exit_rx.try_recv().unwrap().is_none());
+    }
+
+    #[test]
+    fn spawn_reader_thread_data_arrives_and_stopped_flag_set() {
+        let channels = create_session_channels();
+        let mut output_rx = channels.output_tx.subscribe();
+        let mut exit_rx = channels.exit_tx.subscribe();
+        let ctx = ReaderThreadContext {
+            reader: Box::new(std::io::Cursor::new(b"from thread".to_vec())),
+            output_tx: channels.output_tx,
+            exit_tx: channels.exit_tx,
+            output_history: channels.output_history.clone(),
+            stopped: channels.stopped.clone(),
+            child: None,
+            session_id: uuid::Uuid::nil(),
+        };
+
+        spawn_reader_thread(ctx);
+        std::thread::sleep(std::time::Duration::from_millis(100));
+
+        let data = output_rx.try_recv().unwrap();
+        assert_eq!(data, b"from thread");
+        assert!(channels.stopped.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(exit_rx.try_recv().unwrap().is_none());
+    }
 }

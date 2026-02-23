@@ -266,4 +266,40 @@ mod tests {
         // but the function should not panic
         let _ = origins;
     }
+
+    #[test]
+    fn default_allowed_origins_parses_env_var() {
+        // Set the env var, call the function, then unset it.
+        // Use a unique value unlikely to collide with real env.
+        std::env::set_var(
+            "LOOPWIRE_ALLOWED_ORIGINS",
+            "http://localhost:3000, http://example.com, ",
+        );
+        let origins = default_allowed_origins();
+        std::env::remove_var("LOOPWIRE_ALLOWED_ORIGINS");
+
+        assert_eq!(origins.len(), 2);
+        assert!(origins.contains(&"http://localhost:3000".to_string()));
+        assert!(origins.contains(&"http://example.com".to_string()));
+    }
+
+    #[test]
+    fn paths_returns_default_paths_when_not_set() {
+        let config = DaemonConfig::default(); // paths field is None
+                                              // ConfigPaths::new() requires $HOME but should succeed in a normal dev env.
+                                              // We only assert it doesn't panic; the exact path is platform-dependent.
+        if let Ok(paths) = config.paths() {
+            // Sanity-check the returned paths object is usable.
+            let _ = paths.config_dir();
+        }
+        // If $HOME is unset this returns Err, which is also acceptable.
+    }
+
+    #[test]
+    fn load_succeeds_or_returns_error_depending_on_environment() {
+        // DaemonConfig::load() uses ConfigPaths::new() (needs $HOME) and
+        // validate() (needs LOOPWIRE_FRONTEND_URL or a valid config file).
+        // We only assert it doesn't panic.
+        let _ = DaemonConfig::load();
+    }
 }

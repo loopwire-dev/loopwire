@@ -1,6 +1,6 @@
-import { WorkspaceView } from "../../features/ide/WorkspaceView";
-import { AppSidebar } from "../../features/sidebar/AppSidebar";
-import { NewWorkspaceView } from "../../features/workspace/NewWorkspaceView";
+import { WorkspaceView } from "../../features/ide/components/WorkspaceView";
+import { AppSidebar } from "../../features/sidebar/components/AppSidebar";
+import { NewWorkspaceView } from "../../features/workspace/components/NewWorkspaceView";
 import { useDaemon } from "../hooks/useDaemon";
 import { useAppStore } from "../stores/app-store";
 

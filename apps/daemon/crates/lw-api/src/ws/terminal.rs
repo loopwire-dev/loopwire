@@ -372,4 +372,99 @@ mod tests {
             u64::MAX
         );
     }
+
+    // ── TermClientCommand deserialization ──────────────────────────────
+
+    #[test]
+    fn term_client_command_resize_deserializes() {
+        let json = r#"{"type": "resize", "cols": 80, "rows": 24}"#;
+        let cmd: TermClientCommand = serde_json::from_str(json).unwrap();
+        match cmd {
+            TermClientCommand::Resize { cols, rows } => {
+                assert_eq!(cols, 80);
+                assert_eq!(rows, 24);
+            }
+            _ => panic!("expected Resize variant"),
+        }
+    }
+
+    #[test]
+    fn term_client_command_input_utf8_deserializes() {
+        let json = r#"{"type": "input_utf8", "data": "hello\n"}"#;
+        let cmd: TermClientCommand = serde_json::from_str(json).unwrap();
+        match cmd {
+            TermClientCommand::InputUtf8 { data } => {
+                assert_eq!(data, "hello\n");
+            }
+            _ => panic!("expected InputUtf8 variant"),
+        }
+    }
+
+    #[test]
+    fn term_client_command_input_utf8_empty_string() {
+        let json = r#"{"type": "input_utf8", "data": ""}"#;
+        let cmd: TermClientCommand = serde_json::from_str(json).unwrap();
+        match cmd {
+            TermClientCommand::InputUtf8 { data } => assert!(data.is_empty()),
+            _ => panic!("expected InputUtf8 variant"),
+        }
+    }
+
+    #[test]
+    fn term_client_command_unknown_type_fails() {
+        let json = r#"{"type": "unknown_command"}"#;
+        let result = serde_json::from_str::<TermClientCommand>(json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn term_client_command_resize_zero_dimensions() {
+        let json = r#"{"type": "resize", "cols": 0, "rows": 0}"#;
+        let cmd: TermClientCommand = serde_json::from_str(json).unwrap();
+        match cmd {
+            TermClientCommand::Resize { cols, rows } => {
+                assert_eq!(cols, 0);
+                assert_eq!(rows, 0);
+            }
+            _ => panic!("expected Resize variant"),
+        }
+    }
+
+    // ── TermWsQuery deserialization ────────────────────────────────────
+
+    #[test]
+    fn term_ws_query_all_fields() {
+        let json = r#"{"token": "mytoken", "cols": 120, "rows": 40}"#;
+        let query: TermWsQuery = serde_json::from_str(json).unwrap();
+        assert_eq!(query.token, Some("mytoken".to_string()));
+        assert_eq!(query.cols, Some(120));
+        assert_eq!(query.rows, Some(40));
+    }
+
+    #[test]
+    fn term_ws_query_empty() {
+        let json = r#"{}"#;
+        let query: TermWsQuery = serde_json::from_str(json).unwrap();
+        assert!(query.token.is_none());
+        assert!(query.cols.is_none());
+        assert!(query.rows.is_none());
+    }
+
+    #[test]
+    fn term_ws_query_token_only() {
+        let json = r#"{"token": "abc123"}"#;
+        let query: TermWsQuery = serde_json::from_str(json).unwrap();
+        assert_eq!(query.token, Some("abc123".to_string()));
+        assert!(query.cols.is_none());
+        assert!(query.rows.is_none());
+    }
+
+    #[test]
+    fn term_ws_query_dimensions_without_token() {
+        let json = r#"{"cols": 200, "rows": 50}"#;
+        let query: TermWsQuery = serde_json::from_str(json).unwrap();
+        assert!(query.token.is_none());
+        assert_eq!(query.cols, Some(200));
+        assert_eq!(query.rows, Some(50));
+    }
 }

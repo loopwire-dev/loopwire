@@ -22,8 +22,14 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Start the daemon
+    /// Start the daemon in the background
     Start {
+        /// Port to bind to
+        #[arg(long, default_value_t = 9400)]
+        port: u16,
+    },
+    /// Run the daemon in the foreground
+    Run {
         /// Port to bind to
         #[arg(long, default_value_t = 9400)]
         port: u16,
@@ -86,6 +92,60 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Commands::Start { port } => {
+            let config = DaemonConfig::load()?;
+
+            if let Some(pid) = read_pid(&paths) {
+                if is_process_alive(pid) {
+                    anyhow::bail!(
+                        "Daemon already running (PID {}). Use 'loopwired stop' first.",
+                        pid
+                    );
+                } else {
+                    tracing::warn!("Removing stale PID file for dead process {}", pid);
+                    remove_pid(&paths);
+                }
+            }
+
+            paths.ensure_config_dir()?;
+            let (bootstrap_token, _) = load_or_create_bootstrap_token(&paths);
+
+            let exe = std::env::current_exe()?;
+            let out_log = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(paths.config_dir().join("loopwired.out.log"))?;
+            let err_log = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(paths.config_dir().join("loopwired.err.log"))?;
+
+            let mut cmd = std::process::Command::new(&exe);
+            cmd.arg("run")
+                .arg("--port")
+                .arg(port.to_string())
+                .stdin(std::process::Stdio::null())
+                .stdout(out_log)
+                .stderr(err_log);
+
+            #[cfg(unix)]
+            {
+                use std::os::unix::process::CommandExt;
+                cmd.process_group(0);
+            }
+
+            cmd.spawn()?;
+
+            println!("Loopwire daemon started.");
+            println!();
+            println!("  Open: {}/?token={}", config.frontend_url, bootstrap_token);
+            println!();
+            println!("  API:  http://{}:{}", config.host, port);
+            println!();
+
+            Ok(())
+        }
+
+        Commands::Run { port } => {
             let mut config = DaemonConfig::load()?;
             config.port = port;
 
@@ -107,7 +167,7 @@ async fn main() -> anyhow::Result<()> {
             let (bootstrap_token, bootstrap_hash) = load_or_create_bootstrap_token(&paths);
 
             let frontend_url = &config.frontend_url;
-            println!("Loopwire daemon starting...");
+            println!("Loopwire daemon running...");
             println!();
             println!("  Open: {}/?token={}", frontend_url, bootstrap_token);
             println!();
