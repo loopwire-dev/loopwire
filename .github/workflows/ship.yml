@@ -332,7 +332,13 @@ jobs:
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
+          sudo dpkg --add-architecture arm64
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc-aarch64-linux-gnu \
+            libc6-dev-arm64-cross \
+            pkg-config \
+            libssl-dev:arm64
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -343,6 +349,11 @@ jobs:
         run: cargo build --release --target ${{ matrix.target }}
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+          PKG_CONFIG_ALLOW_CROSS: ${{ matrix.target == 'aarch64-unknown-linux-gnu' && '1' || '' }}
+          PKG_CONFIG_SYSROOT_DIR: ${{ matrix.target == 'aarch64-unknown-linux-gnu' && '/' || '' }}
+          PKG_CONFIG_PATH: ${{ matrix.target == 'aarch64-unknown-linux-gnu' && '/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig' || '' }}
+          OPENSSL_LIB_DIR: ${{ matrix.target == 'aarch64-unknown-linux-gnu' && '/usr/lib/aarch64-linux-gnu' || '' }}
+          OPENSSL_INCLUDE_DIR: ${{ matrix.target == 'aarch64-unknown-linux-gnu' && '/usr/include' || '' }}
 
       - name: Rename binary
         shell: bash
