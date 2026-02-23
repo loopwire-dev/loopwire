@@ -85,10 +85,10 @@ jobs:
             daemon:
               - 'apps/daemon/**'
               - '.github/workflows/ship.yml'
-              - 'scripts/install.sh'
             web:
               - 'apps/web/**'
               - '.github/workflows/ship.yml'
+              - 'scripts/install.sh'
 
   compute-daemon-tag:
     name: Compute Daemon Tag
@@ -414,8 +414,10 @@ jobs:
             files+=("$f")
           done < <(find artifacts -type f -name 'loopwired-*' | sort)
 
-          find artifacts -type f -name 'loopwired-*' -exec shasum -a 256 {} \; | \
-            sed 's|  artifacts/[^/]*/||' > artifacts/checksums.sha256
+          while IFS= read -r f; do
+            sum="$(shasum -a 256 "$f" | awk '{print $1}')"
+            printf '%s  %s\n' "$sum" "$(basename "$f")"
+          done < <(find artifacts -type f -name 'loopwired-*' | sort) > artifacts/checksums.sha256
           cat artifacts/checksums.sha256
           files+=("artifacts/checksums.sha256")
 

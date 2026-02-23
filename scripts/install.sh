@@ -20,6 +20,16 @@ sha256_file() {
   fi
 }
 
+extract_expected_checksum() {
+  local checksums="$1"
+  local filename="$2"
+
+  printf '%s\n' "$checksums" | sed -nE \
+    -e "s/^([0-9a-fA-F]{64})[[:space:]]+\\*?${filename}\$/\\1/p" \
+    -e "s/^([0-9a-fA-F]{64})\\*?${filename}\$/\\1/p" \
+    -e "s/^SHA2?-?256 \\(${filename}\\) = ([0-9a-fA-F]{64})\$/\\1/p" | head -n1
+}
+
 # Detect OS and architecture
 detect_platform() {
   local os arch
@@ -207,7 +217,8 @@ mkdir -p "${INSTALL_DIR}"
 curl -fsSL "${DOWNLOAD_URL}" -o "${TMP_PATH}"
 
 CHECKSUMS="$(curl -fsSL "${CHECKSUM_URL}")"
-EXPECTED="$(echo "${CHECKSUMS}" | grep "loopwired-${PLATFORM}" | awk '{print $1}')"
+EXPECTED="$(extract_expected_checksum "${CHECKSUMS}" "loopwired-${PLATFORM}")"
+[ -n "${EXPECTED}" ] || { rm -f "${TMP_PATH}"; exit 1; }
 ACTUAL_TMP="$(sha256_file "${TMP_PATH}")"
 [ "${EXPECTED}" = "${ACTUAL_TMP}" ] || { rm -f "${TMP_PATH}"; exit 1; }
 
@@ -337,7 +348,13 @@ curl -sL "$DOWNLOAD_URL" -o "${INSTALL_DIR}/${BINARY_NAME}"
 # Download and verify checksum
 echo "Verifying checksum..."
 CHECKSUMS=$(curl -sL "$CHECKSUM_URL")
-EXPECTED=$(echo "$CHECKSUMS" | grep "loopwired-${PLATFORM}" | awk '{print $1}')
+EXPECTED="$(extract_expected_checksum "${CHECKSUMS}" "loopwired-${PLATFORM}")"
+if [ -z "$EXPECTED" ]; then
+  echo "Checksum verification FAILED!"
+  echo "  Could not find checksum entry for loopwired-${PLATFORM}"
+  rm -f "${INSTALL_DIR}/${BINARY_NAME}"
+  exit 1
+fi
 ACTUAL=$(sha256_file "${INSTALL_DIR}/${BINARY_NAME}")
 
 if [ "$EXPECTED" != "$ACTUAL" ]; then

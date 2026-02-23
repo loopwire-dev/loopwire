@@ -28,3 +28,6 @@ apps/web/coverage/
 # Qlty
 .qlty/*
 !.qlty/qlty.toml
+
+# Wrangler
+.wrangler/
