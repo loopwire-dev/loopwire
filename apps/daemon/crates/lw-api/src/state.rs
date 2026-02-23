@@ -102,7 +102,7 @@ impl AppState {
             workspace_registry,
             fs_watcher,
 
-            version: env!("CARGO_PKG_VERSION"),
+            version: option_env!("LOOPWIRED_VERSION").unwrap_or(env!("CARGO_PKG_VERSION")),
         })
     }
 }

@@ -266,7 +266,7 @@ jobs:
 
   build-daemon:
     name: Build Daemon (${{ matrix.target }})
-    needs: [prepare, detect-changes, verify-daemon]
+    needs: [prepare, detect-changes, verify-daemon, compute-daemon-tag]
     if: needs.detect-changes.outputs.daemon_changed == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
@@ -298,8 +298,24 @@ jobs:
       - name: Install cross-compilation tools
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
+          set -euo pipefail
           sudo apt-get update
           sudo dpkg --add-architecture arm64
+          # Keep default Ubuntu sources on amd64 to avoid arm64 lookups on archive/security mirrors.
+          if [[ -f /etc/apt/sources.list.d/ubuntu.sources ]]; then
+            sudo sed -i '/^Architectures:/d' /etc/apt/sources.list.d/ubuntu.sources
+            sudo sed -i '/^Signed-By:/a Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources
+          fi
+          if [[ -f /etc/apt/sources.list ]]; then
+            sudo sed -i -E 's/^deb[[:space:]]+http:\/\/(archive|security)\.ubuntu\.com\/ubuntu/deb [arch=amd64] http:\/\/\1.ubuntu.com\/ubuntu/g' /etc/apt/sources.list
+          fi
+          cat <<'EOF' | sudo tee /etc/apt/sources.list.d/ubuntu-ports-arm64.list >/dev/null
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-backports main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse
+          EOF
+
           sudo apt-get update
           sudo apt-get install -y \
             gcc-aarch64-linux-gnu \
@@ -314,6 +330,8 @@ jobs:
       - name: Build
         working-directory: apps/daemon
         shell: bash
+        env:
+          LOOPWIRED_VERSION: ${{ needs.compute-daemon-tag.outputs.daemon_tag }}
         run: |
           set -euo pipefail
           if [[ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]]; then

@@ -66,3 +66,8 @@ tasks:
     command: 'git add -A .'
     deps:
       - 'prepare-git-add'
+
+  daemon-build-check:
+    command: 'bash scripts/check-daemon-builds.sh'
+    options:
+      runInCI: false

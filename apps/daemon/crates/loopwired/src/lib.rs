@@ -6,6 +6,16 @@ use std::fs;
 use std::net::{IpAddr, Ipv4Addr};
 use std::path::Path;
 
+/// Build-time daemon version string.
+///
+/// When `LOOPWIRED_VERSION` is provided in the build environment (for example
+/// by CI release workflows), that value is used. Otherwise we fall back to the
+/// crate package version.
+pub const DAEMON_VERSION: &str = match option_env!("LOOPWIRED_VERSION") {
+    Some(version) => version,
+    None => env!("CARGO_PKG_VERSION"),
+};
+
 // ---------------------------------------------------------------------------
 // PID file management
 // ---------------------------------------------------------------------------

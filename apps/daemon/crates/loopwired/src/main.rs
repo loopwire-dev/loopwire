@@ -10,7 +10,11 @@ use lw_config::{ConfigPaths, DaemonConfig};
 use std::net::SocketAddr;
 
 #[derive(Parser)]
-#[command(name = "loopwired", version, about = "Loopwire daemon")]
+#[command(
+    name = "loopwired",
+    version = loopwired::DAEMON_VERSION,
+    about = "Loopwire daemon"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -345,7 +349,7 @@ async fn main() -> anyhow::Result<()> {
         }
 
         Commands::Version => {
-            println!("loopwired {}", env!("CARGO_PKG_VERSION"));
+            println!("loopwired {}", loopwired::DAEMON_VERSION);
             Ok(())
         }
     }
