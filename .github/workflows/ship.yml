@@ -8,6 +8,16 @@ on:
         required: true
         default: main
         type: string
+      scope:
+        description: Which app flow to run
+        required: true
+        default: auto
+        type: choice
+        options:
+          - auto
+          - web
+          - daemon
+          - both
 
 concurrency:
   group: ${{ github.workflow }}
@@ -87,33 +97,40 @@ jobs:
             web_paths:
               - 'apps/web/**'
               - 'scripts/install.sh'
-            ship_workflow:
-              - '.github/workflows/ship.yml'
 
       - id: derive
-        name: Classify service changes
+        name: Resolve ship scope
         shell: bash
         run: |
           set -euo pipefail
 
           daemon_changed="${{ steps.changes.outputs.daemon_paths }}"
           web_changed="${{ steps.changes.outputs.web_paths }}"
-
-          if [[ "${{ steps.changes.outputs.ship_workflow }}" == "true" ]]; then
-            ship_diff="$(git diff --unified=0 "${{ needs.prepare.outputs.base_sha }}".."${{ needs.prepare.outputs.ship_sha }}" -- .github/workflows/ship.yml || true)"
-            changed_lines="$(echo "${ship_diff}" | grep -E '^[+-]' | grep -Ev '^(---|\+\+\+)' || true)"
-
-            if echo "${changed_lines}" | grep -Eiq '(daemon|build-daemon|verify-daemon|publish-daemon-release|compute-daemon-tag|apps/daemon)'; then
-              daemon_changed="true"
-            fi
-
-            if echo "${changed_lines}" | grep -Eiq '(web|deploy-web|verify-web|apps/web|install\.sh|cloudflare|pages)'; then
+          scope="${{ inputs.scope }}"
+          case "${scope}" in
+            auto)
+              ;;
+            web)
+              daemon_changed="false"
               web_changed="true"
-            fi
-          fi
+              ;;
+            daemon)
+              daemon_changed="true"
+              web_changed="false"
+              ;;
+            both)
+              daemon_changed="true"
+              web_changed="true"
+              ;;
+            *)
+              echo "Unsupported scope: ${scope}"
+              exit 1
+              ;;
+          esac
 
           echo "daemon_changed=${daemon_changed}" >> "$GITHUB_OUTPUT"
           echo "web_changed=${web_changed}" >> "$GITHUB_OUTPUT"
+          echo "scope=${scope}"
           echo "daemon_changed=${daemon_changed}"
           echo "web_changed=${web_changed}"
 
