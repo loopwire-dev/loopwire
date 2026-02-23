@@ -215,8 +215,15 @@ jobs:
 
   deploy-web:
     name: Deploy Web
-    needs: [prepare, detect-changes, verify-web]
-    if: needs.detect-changes.outputs.web_changed == 'true'
+    needs: [prepare, detect-changes, verify-web, publish-daemon-release]
+    if: >-
+      always() &&
+      needs.detect-changes.outputs.web_changed == 'true' &&
+      needs.verify-web.result == 'success' &&
+      (
+        needs.detect-changes.outputs.daemon_changed != 'true' ||
+        needs.publish-daemon-release.result == 'success'
+      )
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -249,58 +256,17 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: >-
-          bunx --bun wrangler@4 pages deploy dist
-          --project-name "${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME }}"
-          --branch=main
-
-  create-daemon-tag:
-    name: Create Daemon Tag
-    needs: [prepare, detect-changes, verify-daemon, compute-daemon-tag]
-    if: needs.detect-changes.outputs.daemon_changed == 'true'
-    runs-on: ubuntu-latest
-    outputs:
-      daemon_tag: ${{ steps.tag.outputs.daemon_tag }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - id: tag
-        name: Create and push tag
         shell: bash
         run: |
           set -euo pipefail
-
-          tag="${{ needs.compute-daemon-tag.outputs.daemon_tag }}"
-          sha="${{ needs.prepare.outputs.ship_sha }}"
-
-          if [[ -z "${tag}" ]]; then
-            echo "daemon_tag is empty."
-            exit 1
-          fi
-
-          git fetch --tags origin
-
-          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
-            existing_sha="$(git rev-list -n 1 "${tag}")"
-            if [[ "${existing_sha}" != "${sha}" ]]; then
-              echo "Tag ${tag} already exists at ${existing_sha}, expected ${sha}."
-              exit 1
-            fi
-            echo "Tag ${tag} already exists at desired commit."
-          else
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git tag -a "${tag}" "${sha}" -m "Release ${tag}"
-            git push origin "${tag}"
-          fi
-
-          echo "daemon_tag=${tag}" >> "$GITHUB_OUTPUT"
+          test -d ./dist
+          bunx --bun wrangler pages deploy ./dist \
+            --project-name "${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME }}" \
+            --branch=main
 
   build-daemon:
     name: Build Daemon (${{ matrix.target }})
-    needs: [prepare, detect-changes, create-daemon-tag]
+    needs: [prepare, detect-changes, verify-daemon]
     if: needs.detect-changes.outputs.daemon_changed == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
@@ -347,14 +313,18 @@ jobs:
 
       - name: Build
         working-directory: apps/daemon
-        run: cargo build --release --target ${{ matrix.target }}
-        env:
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-          PKG_CONFIG_ALLOW_CROSS: ${{ matrix.target == 'aarch64-unknown-linux-gnu' && '1' || '' }}
-          PKG_CONFIG_SYSROOT_DIR: ${{ matrix.target == 'aarch64-unknown-linux-gnu' && '/' || '' }}
-          PKG_CONFIG_PATH: ${{ matrix.target == 'aarch64-unknown-linux-gnu' && '/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig' || '' }}
-          OPENSSL_LIB_DIR: ${{ matrix.target == 'aarch64-unknown-linux-gnu' && '/usr/lib/aarch64-linux-gnu' || '' }}
-          OPENSSL_INCLUDE_DIR: ${{ matrix.target == 'aarch64-unknown-linux-gnu' && '/usr/include' || '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]]; then
+            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+            export PKG_CONFIG_ALLOW_CROSS=1
+            export PKG_CONFIG_SYSROOT_DIR=/
+            export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig
+            export OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu
+            export OPENSSL_INCLUDE_DIR=/usr/include
+          fi
+          cargo build --release --target ${{ matrix.target }}
 
       - name: Rename binary
         shell: bash
@@ -368,13 +338,43 @@ jobs:
 
   publish-daemon-release:
     name: Publish Daemon Release
-    needs: [prepare, detect-changes, create-daemon-tag, build-daemon]
+    needs: [prepare, detect-changes, compute-daemon-tag, build-daemon]
     if: needs.detect-changes.outputs.daemon_changed == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ needs.prepare.outputs.ship_sha }}
+
+      - name: Create and push tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="${{ needs.compute-daemon-tag.outputs.daemon_tag }}"
+          sha="${{ needs.prepare.outputs.ship_sha }}"
+
+          if [[ -z "${tag}" ]]; then
+            echo "daemon_tag is empty."
+            exit 1
+          fi
+
+          git fetch --tags origin
+
+          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+            existing_sha="$(git rev-list -n 1 "${tag}")"
+            if [[ "${existing_sha}" != "${sha}" ]]; then
+              echo "Tag ${tag} already exists at ${existing_sha}, expected ${sha}."
+              exit 1
+            fi
+            echo "Tag ${tag} already exists at desired commit."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "${tag}" "${sha}" -m "Release ${tag}"
+            git push origin "${tag}"
+          fi
 
       - uses: actions/download-artifact@v4
         with:
@@ -410,7 +410,7 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.create-daemon-tag.outputs.daemon_tag }}
+          tag_name: ${{ needs.compute-daemon-tag.outputs.daemon_tag }}
           target_commitish: ${{ needs.prepare.outputs.ship_sha }}
           files: ${{ steps.assets.outputs.paths }}
           generate_release_notes: true
