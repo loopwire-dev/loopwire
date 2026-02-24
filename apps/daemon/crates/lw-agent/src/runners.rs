@@ -50,28 +50,60 @@ pub trait AgentRunner: Send + Sync {
     fn detect_version(&self) -> Option<String>;
 }
 
+/// Returns the shells to try for binary detection, in order.
+///
+/// Starts with the user's `$SHELL` when it is a Bourne-compatible shell that
+/// supports `sh -lc` semantics (bash, zsh, dash, ksh). Always appends `sh`
+/// as a final fallback so detection works even if `$SHELL` is unset, exotic
+/// (fish, nu, …), or already equals sh.
+fn candidate_login_shells() -> Vec<String> {
+    let mut shells: Vec<String> = Vec::new();
+
+    if let Ok(user_shell) = std::env::var("SHELL") {
+        let basename = user_shell.rsplit('/').next().unwrap_or(&user_shell);
+        if matches!(basename, "sh" | "bash" | "zsh" | "dash" | "ksh") {
+            shells.push(user_shell);
+        }
+    }
+
+    // Append sh unless it is already in the list.
+    let has_sh = shells.iter().any(|s| s == "sh" || s.ends_with("/sh"));
+    if !has_sh {
+        shells.push("sh".to_string());
+    }
+
+    shells
+}
+
 pub fn detect_version_from_command(binary: &str, args: &[&str]) -> Option<String> {
     let full_cmd = std::iter::once(binary)
         .chain(args.iter().copied())
         .collect::<Vec<_>>()
         .join(" ");
-    std::process::Command::new("sh")
-        .args(["-lc", &full_cmd])
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .map(|s| extract_version(&s))
+    candidate_login_shells().iter().find_map(|shell| {
+        std::process::Command::new(shell)
+            .args(["-lc", &full_cmd])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .map(|s| extract_version(&s))
+    })
 }
 
 pub fn is_command_available(binary: &str) -> bool {
-    // Use a login shell so user PATH additions (nvm, npm globals, homebrew, etc.)
-    // are respected. `command -v` is POSIX-safe and avoids spawning a subshell.
-    std::process::Command::new("sh")
-        .args(["-lc", &format!("command -v -- {binary}")])
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    // Try each candidate login shell in order; return true as soon as any
+    // one finds the binary.  This handles setups where PATH additions live
+    // in shell-specific profile files (e.g. ~/.zprofile for zsh, ~/.profile
+    // for sh/bash) that a single shell invocation would miss.
+    let cmd = format!("command -v -- {binary}");
+    candidate_login_shells().iter().any(|shell| {
+        std::process::Command::new(shell)
+            .args(["-lc", &cmd])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    })
 }
 
 fn extract_version(s: &str) -> String {
