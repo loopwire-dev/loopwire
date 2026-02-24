@@ -8,6 +8,21 @@ vi.mock("next-themes", () => ({
 	useTheme: useThemeMock,
 }));
 
+// The tests call LandingPage() directly as a plain function (no React renderer),
+// so useState/useEffect have no dispatcher. Stub them as no-ops so useGitHubStars
+// returns null (star count hidden) without throwing.
+vi.mock("react", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("react")>();
+	return {
+		...actual,
+		useState: <T,>(init: T | (() => T)) => {
+			const value = typeof init === "function" ? (init as () => T)() : init;
+			return [value, vi.fn()] as [T, ReturnType<typeof vi.fn>];
+		},
+		useEffect: vi.fn(),
+	};
+});
+
 type ElementLike = {
 	type?: unknown;
 	props?: {
