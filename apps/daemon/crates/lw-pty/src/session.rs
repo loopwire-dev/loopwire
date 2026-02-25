@@ -51,6 +51,13 @@ impl PtySession {
             cmd.env(key, value);
         }
 
+        // Remove parent-session markers that would cause agents to refuse to
+        // start (e.g. Claude Code detecting it is being launched inside an
+        // existing Claude Code session).
+        for key in &["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"] {
+            cmd.env_remove(key);
+        }
+
         let child = pair
             .slave
             .spawn_command(cmd)

@@ -171,7 +171,15 @@ pub fn build_router(state: AppState) -> Router {
         .merge(protected_routes)
         .merge(ws_routes)
         .layer(cors)
-        .layer(TraceLayer::new_for_http())
+        .layer(TraceLayer::new_for_http().make_span_with(
+            |request: &axum::http::Request<axum::body::Body>| {
+                tracing::info_span!(
+                    "http_request",
+                    method = %request.method(),
+                    uri = %request.uri()
+                )
+            },
+        ))
         .with_state(state)
 }
 

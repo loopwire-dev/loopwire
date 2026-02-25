@@ -75,6 +75,47 @@ fn candidate_login_shells() -> Vec<String> {
     shells
 }
 
+/// Returns the flags to start a shell as an interactive login session — the
+/// same mode a terminal emulator uses.  `-i` sources RC files (`~/.zshrc`,
+/// `~/.bashrc`), `-l` sources profile files (`~/.zprofile`, `~/.profile`),
+/// and `-c` runs the given command string.
+fn interactive_login_args() -> &'static [&'static str] {
+    &["-ilc"]
+}
+
+fn parse_path_from_shell_output(stdout: &str) -> Option<String> {
+    for line in stdout.lines().rev() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let absolute_parts: Vec<&str> = trimmed
+            .split(':')
+            .filter(|part| part.starts_with('/'))
+            .collect();
+        if !absolute_parts.is_empty() {
+            return Some(absolute_parts.join(":"));
+        }
+    }
+    None
+}
+
+fn parse_command_path_from_shell_output(stdout: &str) -> Option<String> {
+    for line in stdout.lines().rev() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        for token in trimmed.split_whitespace() {
+            let candidate = token.trim_matches(|c| c == '"' || c == '\'');
+            if candidate.starts_with('/') {
+                return Some(candidate.to_string());
+            }
+        }
+    }
+    None
+}
+
 pub fn detect_version_from_command(binary: &str, args: &[&str]) -> Option<String> {
     let full_cmd = std::iter::once(binary)
         .chain(args.iter().copied())
@@ -82,7 +123,8 @@ pub fn detect_version_from_command(binary: &str, args: &[&str]) -> Option<String
         .join(" ");
     candidate_login_shells().iter().find_map(|shell| {
         std::process::Command::new(shell)
-            .args(["-lc", &full_cmd])
+            .args(interactive_login_args())
+            .arg(&full_cmd)
             .output()
             .ok()
             .filter(|o| o.status.success())
@@ -91,19 +133,42 @@ pub fn detect_version_from_command(binary: &str, args: &[&str]) -> Option<String
     })
 }
 
-pub fn is_command_available(binary: &str) -> bool {
-    // Try each candidate login shell in order; return true as soon as any
-    // one finds the binary.  This handles setups where PATH additions live
-    // in shell-specific profile files (e.g. ~/.zprofile for zsh, ~/.profile
-    // for sh/bash) that a single shell invocation would miss.
-    let cmd = format!("command -v -- {binary}");
-    candidate_login_shells().iter().any(|shell| {
+/// Returns the `PATH` as seen by a fully interactive login shell — the same
+/// environment a user gets when they open a terminal.  This ensures that
+/// PATH additions in *both* profile files (`~/.zprofile`) and RC files
+/// (`~/.zshrc`, `~/.bashrc`) are visible, even when the daemon was launched
+/// by launchd with a sparse environment.
+pub fn resolve_login_shell_path() -> Option<String> {
+    candidate_login_shells().iter().find_map(|shell| {
         std::process::Command::new(shell)
-            .args(["-lc", &cmd])
+            .args(interactive_login_args())
+            .arg("printenv PATH")
             .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false)
+            .ok()
+            .filter(|o| o.status.success())
+            .and_then(|o| parse_path_from_shell_output(&String::from_utf8_lossy(&o.stdout)))
     })
+}
+
+/// Returns the absolute path to `binary` as resolved by a fully interactive
+/// login shell, or `None` if the binary cannot be found.  Mirrors the
+/// shell-search strategy used by `is_command_available` so detection and
+/// spawn use the same PATH.
+pub fn resolve_command_path(binary: &str) -> Option<String> {
+    let cmd = format!("command -v -- {binary}");
+    candidate_login_shells().iter().find_map(|shell| {
+        std::process::Command::new(shell)
+            .args(interactive_login_args())
+            .arg(&cmd)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .and_then(|o| parse_command_path_from_shell_output(&String::from_utf8_lossy(&o.stdout)))
+    })
+}
+
+pub fn is_command_available(binary: &str) -> bool {
+    resolve_command_path(binary).is_some()
 }
 
 fn extract_version(s: &str) -> String {
@@ -252,6 +317,32 @@ mod tests {
     #[test]
     fn is_command_available_nonexistent() {
         assert!(!is_command_available("__nonexistent_binary_12345__"));
+    }
+
+    #[test]
+    fn resolve_login_shell_path_is_nonempty_and_absolute() {
+        let path = resolve_login_shell_path();
+        assert!(path.is_some(), "login shell PATH should be resolvable");
+        let path = path.unwrap();
+        // PATH is colon-separated; every component should start with '/'
+        assert!(
+            path.split(':').all(|p| p.starts_with('/')),
+            "all PATH entries should be absolute: {path}"
+        );
+    }
+
+    #[test]
+    fn resolve_command_path_nonexistent() {
+        assert!(resolve_command_path("__nonexistent_binary_12345__").is_none());
+    }
+
+    #[test]
+    fn resolve_command_path_real_binary() {
+        // sh is guaranteed to be present; its resolved path must be non-empty
+        // and start with '/'.
+        let path = resolve_command_path("sh");
+        assert!(path.is_some());
+        assert!(path.unwrap().starts_with('/'));
     }
 
     #[test]
