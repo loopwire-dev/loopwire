@@ -62,6 +62,35 @@ fn generate_conversation_id() -> String {
     Uuid::new_v4().to_string()
 }
 
+/// Builds the environment for a PTY-spawned agent process.
+///
+/// Injects variables that the daemon's launchd environment lacks but that
+/// interactive CLI agents (and the MCP servers they spawn) require:
+///
+/// - `PATH`: resolved from a login shell so Homebrew/nvm/cargo tools are
+///   visible.
+/// - `TERM` / `COLORTERM`: the PTY provides a colour-capable terminal;
+///   without these Claude Code's Ink TUI degrades to dumb/broken rendering.
+///
+/// Runner-supplied values always take precedence over the injected defaults.
+fn build_env(runner: &dyn crate::runners::AgentRunner) -> Vec<(String, String)> {
+    let mut env: Vec<(String, String)> = runner.env().into_iter().collect();
+
+    if !env.iter().any(|(k, _)| k == "PATH") {
+        if let Some(path) = crate::runners::resolve_login_shell_path() {
+            env.push(("PATH".to_string(), path));
+        }
+    }
+    if !env.iter().any(|(k, _)| k == "TERM") {
+        env.push(("TERM".to_string(), "xterm-256color".to_string()));
+    }
+    if !env.iter().any(|(k, _)| k == "COLORTERM") {
+        env.push(("COLORTERM".to_string(), "truecolor".to_string()));
+    }
+
+    env
+}
+
 fn normalized_name(custom_name: Option<String>) -> Option<String> {
     custom_name
         .as_deref()
@@ -130,10 +159,15 @@ impl AgentManager {
         let conversation_id = generate_conversation_id();
 
         let args = runner.args(&workspace_path);
-        let env: Vec<(String, String)> = runner.env().into_iter().collect();
+        let env = build_env(runner.as_ref());
 
-        let (program, args) =
-            launch_for_start(agent_type, runner.command(), args, &conversation_id);
+        let (program, args) = launch_for_start(
+            agent_type,
+            crate::runners::resolve_command_path(&runner.command())
+                .unwrap_or_else(|| runner.command()),
+            args,
+            &conversation_id,
+        );
         let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
 
         let session = self
@@ -220,11 +254,12 @@ impl AgentManager {
             .unwrap_or_else(generate_conversation_id);
 
         let resume_result = async {
-            let env: Vec<(String, String)> = runner.env().into_iter().collect();
+            let env = build_env(runner.as_ref());
 
             let (program, args) = launch_for_resume(
                 persisted.agent_type,
-                runner.command(),
+                crate::runners::resolve_command_path(&runner.command())
+                    .unwrap_or_else(|| runner.command()),
                 &preferred_conversation_id,
             );
             let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
@@ -257,11 +292,12 @@ impl AgentManager {
             ),
             Err(resume_err) => {
                 let fresh_conversation_id = generate_conversation_id();
-                let env: Vec<(String, String)> = runner.env().into_iter().collect();
+                let env = build_env(runner.as_ref());
 
                 let (program, args) = launch_for_start(
                     persisted.agent_type,
-                    runner.command(),
+                    crate::runners::resolve_command_path(&runner.command())
+                        .unwrap_or_else(|| runner.command()),
                     runner.args(&workspace_path),
                     &fresh_conversation_id,
                 );
@@ -455,10 +491,11 @@ impl AgentManager {
         }
 
         let fresh_conversation_id = Uuid::new_v4().to_string();
-        let env: Vec<(String, String)> = runner.env().into_iter().collect();
+        let env = build_env(runner.as_ref());
         let (program, args) = launch_for_start(
             handle.agent_type,
-            runner.command(),
+            crate::runners::resolve_command_path(&runner.command())
+                .unwrap_or_else(|| runner.command()),
             runner.args(&handle.workspace_path),
             &fresh_conversation_id,
         );

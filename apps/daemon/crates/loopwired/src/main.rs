@@ -78,6 +78,97 @@ fn remove_pid(paths: &ConfigPaths) {
     remove_pid_file(&paths.pid_path());
 }
 
+fn pid_looks_like_loopwired(pid: u32) -> bool {
+    #[cfg(unix)]
+    {
+        let comm_output = std::process::Command::new("ps")
+            .arg("-p")
+            .arg(pid.to_string())
+            .arg("-o")
+            .arg("comm=")
+            .output();
+
+        let comm_matches = match comm_output {
+            Ok(out) if out.status.success() => {
+                let comm = String::from_utf8_lossy(&out.stdout)
+                    .trim()
+                    .to_ascii_lowercase();
+                comm.ends_with("loopwired")
+            }
+            _ => false,
+        };
+
+        if !comm_matches {
+            return false;
+        }
+
+        let args_output = std::process::Command::new("ps")
+            .arg("-p")
+            .arg(pid.to_string())
+            .arg("-o")
+            .arg("args=")
+            .output();
+
+        match args_output {
+            Ok(out) if out.status.success() => {
+                let args = String::from_utf8_lossy(&out.stdout)
+                    .trim()
+                    .to_ascii_lowercase();
+                let exe = args.split_whitespace().next().unwrap_or_default();
+                exe.ends_with("/loopwired") || exe == "loopwired"
+            }
+            _ => false,
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = pid;
+        true
+    }
+}
+
+#[cfg(unix)]
+fn send_signal(pid: u32, signal: i32) -> anyhow::Result<()> {
+    let raw_pid = i32::try_from(pid).map_err(|_| anyhow::anyhow!("PID out of range: {}", pid))?;
+    // Safety: `raw_pid` is validated as a positive process id for libc::kill.
+    let rc = unsafe { libc::kill(raw_pid, signal) };
+    if rc != 0 {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn try_start_via_launchctl() -> anyhow::Result<bool> {
+    let home = match std::env::var("HOME") {
+        Ok(v) => v,
+        Err(_) => return Ok(false),
+    };
+    let plist = format!("{home}/Library/LaunchAgents/dev.loopwire.loopwired.plist");
+    if !std::path::Path::new(&plist).exists() {
+        return Ok(false);
+    }
+
+    // Safety: libc::geteuid has no preconditions and returns the effective uid.
+    let uid = unsafe { libc::geteuid() };
+    let domain = format!("gui/{uid}");
+    let label = format!("{domain}/dev.loopwire.loopwired");
+
+    let _ = std::process::Command::new("launchctl")
+        .arg("bootstrap")
+        .arg(&domain)
+        .arg(&plist)
+        .status();
+
+    let status = std::process::Command::new("launchctl")
+        .arg("kickstart")
+        .arg("-k")
+        .arg(&label)
+        .status()?;
+
+    Ok(status.success())
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -96,13 +187,47 @@ async fn main() -> anyhow::Result<()> {
 
             if let Some(pid) = read_pid(&paths) {
                 if is_process_alive(pid) {
-                    anyhow::bail!(
-                        "Daemon already running (PID {}). Use 'loopwired stop' first.",
-                        pid
-                    );
+                    if !pid_looks_like_loopwired(pid) {
+                        tracing::warn!(
+                            "PID file points to live non-loopwired process {}, cleaning up.",
+                            pid
+                        );
+                        remove_pid(&paths);
+                    } else {
+                        anyhow::bail!(
+                            "Daemon already running (PID {}). Use 'loopwired stop' first.",
+                            pid
+                        );
+                    }
                 } else {
                     tracing::warn!("Removing stale PID file for dead process {}", pid);
                     remove_pid(&paths);
+                }
+            }
+
+            #[cfg(target_os = "macos")]
+            {
+                if std::path::Path::new(&format!(
+                    "{}/Library/LaunchAgents/dev.loopwire.loopwired.plist",
+                    std::env::var("HOME").unwrap_or_default()
+                ))
+                .exists()
+                {
+                    if !try_start_via_launchctl()? {
+                        anyhow::bail!(
+                            "Failed to start daemon via launchctl. Try: launchctl kickstart -k gui/{}/dev.loopwire.loopwired",
+                            // Safety: libc::geteuid has no preconditions and returns the effective uid.
+                            unsafe { libc::geteuid() }
+                        );
+                    }
+                    let (bootstrap_token, _) = load_or_create_bootstrap_token(&paths);
+                    println!("Loopwire daemon started.");
+                    println!();
+                    println!("  Open: {}/?token={}", config.frontend_url, bootstrap_token);
+                    println!();
+                    println!("  API:  http://{}:{}", config.host, config.port);
+                    println!();
+                    return Ok(());
                 }
             }
 
@@ -119,21 +244,27 @@ async fn main() -> anyhow::Result<()> {
                 .append(true)
                 .open(paths.config_dir().join("loopwired.err.log"))?;
 
-            let mut cmd = std::process::Command::new(&exe);
-            cmd.arg("run")
-                .arg("--port")
-                .arg(port.to_string())
-                .stdin(std::process::Stdio::null())
-                .stdout(out_log)
-                .stderr(err_log);
+            let spawn_child =
+                |_detach_process_group: bool| -> std::io::Result<std::process::Child> {
+                    let mut cmd = std::process::Command::new(&exe);
+                    cmd.arg("run")
+                        .arg("--port")
+                        .arg(port.to_string())
+                        .stdin(std::process::Stdio::null())
+                        .stdout(out_log.try_clone()?)
+                        .stderr(err_log.try_clone()?);
+
+                    cmd.spawn()
+                };
 
             #[cfg(unix)]
             {
-                use std::os::unix::process::CommandExt;
-                cmd.process_group(0);
+                spawn_child(false)?;
             }
-
-            cmd.spawn()?;
+            #[cfg(not(unix))]
+            {
+                spawn_child(false)?;
+            }
 
             println!("Loopwire daemon started.");
             println!();
@@ -151,10 +282,18 @@ async fn main() -> anyhow::Result<()> {
 
             if let Some(pid) = read_pid(&paths) {
                 if is_process_alive(pid) {
-                    anyhow::bail!(
-                        "Daemon already running (PID {}). Use 'loopwired stop' first.",
-                        pid
-                    );
+                    if !pid_looks_like_loopwired(pid) {
+                        tracing::warn!(
+                            "PID file points to live non-loopwired process {}, cleaning up.",
+                            pid
+                        );
+                        remove_pid(&paths);
+                    } else {
+                        anyhow::bail!(
+                            "Daemon already running (PID {}). Use 'loopwired stop' first.",
+                            pid
+                        );
+                    }
                 } else {
                     tracing::warn!("Removing stale PID file for dead process {}", pid);
                     remove_pid(&paths);
@@ -241,7 +380,7 @@ async fn main() -> anyhow::Result<()> {
 
         Commands::Status => {
             match read_pid(&paths) {
-                Some(pid) if is_process_alive(pid) => {
+                Some(pid) if is_process_alive(pid) && pid_looks_like_loopwired(pid) => {
                     println!("Daemon is running (PID {})", pid);
                     let config = DaemonConfig::load()?;
                     match reqwest::get(format!("http://{}/api/v1/health", config.bind_addr())).await
@@ -256,6 +395,13 @@ async fn main() -> anyhow::Result<()> {
                         }
                     }
                 }
+                Some(pid) if is_process_alive(pid) => {
+                    println!(
+                        "PID file points to non-loopwired process {}. Cleaning stale PID file.",
+                        pid
+                    );
+                    remove_pid(&paths);
+                }
                 Some(pid) => {
                     println!("Daemon is not running (stale PID {})", pid);
                     remove_pid(&paths);
@@ -269,12 +415,10 @@ async fn main() -> anyhow::Result<()> {
 
         Commands::Stop => {
             match read_pid(&paths) {
-                Some(pid) if is_process_alive(pid) => {
+                Some(pid) if is_process_alive(pid) && pid_looks_like_loopwired(pid) => {
                     println!("Stopping daemon (PID {})...", pid);
                     #[cfg(unix)]
-                    unsafe {
-                        libc::kill(pid as i32, libc::SIGTERM);
-                    }
+                    send_signal(pid, libc::SIGTERM)?;
                     for _ in 0..50 {
                         if !is_process_alive(pid) {
                             break;
@@ -284,12 +428,17 @@ async fn main() -> anyhow::Result<()> {
                     if is_process_alive(pid) {
                         println!("Force killing...");
                         #[cfg(unix)]
-                        unsafe {
-                            libc::kill(pid as i32, libc::SIGKILL);
-                        }
+                        send_signal(pid, libc::SIGKILL)?;
                     }
                     remove_pid(&paths);
                     println!("Daemon stopped.");
+                }
+                Some(pid) if is_process_alive(pid) => {
+                    println!(
+                        "Refusing to stop PID {} because it is not loopwired. Cleaning stale PID file.",
+                        pid
+                    );
+                    remove_pid(&paths);
                 }
                 Some(pid) => {
                     println!("Daemon not running (stale PID {}), cleaning up.", pid);
