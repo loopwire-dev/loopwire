@@ -26,6 +26,7 @@ import {
 	onDaemonWsEvent,
 	onDaemonWsReconnect,
 	onGitStatusEvent,
+	resubscribeGitStatus,
 	subscribeGitStatus,
 	unsubscribeGitStatus,
 } from "../ws";
@@ -62,6 +63,44 @@ describe("daemon ws wrappers", () => {
 		});
 		expect(sendMock).toHaveBeenNthCalledWith(
 			2,
+			"git:unsubscribe",
+			{ workspace_id: "wid" },
+			{ queueWhenDisconnected: false },
+		);
+	});
+
+	it("dedupes subscribe and tracks refcounts", () => {
+		subscribeGitStatus("wid");
+		subscribeGitStatus("wid");
+		unsubscribeGitStatus("wid");
+		unsubscribeGitStatus("wid");
+
+		expect(sendMock).toHaveBeenCalledTimes(2);
+		expect(sendMock).toHaveBeenNthCalledWith(1, "git:subscribe", {
+			workspace_id: "wid",
+		});
+		expect(sendMock).toHaveBeenNthCalledWith(
+			2,
+			"git:unsubscribe",
+			{ workspace_id: "wid" },
+			{ queueWhenDisconnected: false },
+		);
+	});
+
+	it("resubscribes without incrementing refs", () => {
+		subscribeGitStatus("wid");
+		resubscribeGitStatus("wid");
+		unsubscribeGitStatus("wid");
+
+		expect(sendMock).toHaveBeenCalledTimes(3);
+		expect(sendMock).toHaveBeenNthCalledWith(1, "git:subscribe", {
+			workspace_id: "wid",
+		});
+		expect(sendMock).toHaveBeenNthCalledWith(2, "git:subscribe", {
+			workspace_id: "wid",
+		});
+		expect(sendMock).toHaveBeenNthCalledWith(
+			3,
 			"git:unsubscribe",
 			{ workspace_id: "wid" },
 			{ queueWhenDisconnected: false },

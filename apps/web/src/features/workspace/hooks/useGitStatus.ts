@@ -7,6 +7,7 @@ import {
 import {
 	onDaemonWsReconnect,
 	onGitStatusEvent,
+	resubscribeGitStatus,
 	subscribeGitStatus,
 	unsubscribeGitStatus,
 } from "../../../shared/lib/daemon/ws";
@@ -122,7 +123,7 @@ export function useGitStatus(workspaceId: string | null): GitStatusMap {
 		// Re-subscribe on WS reconnect
 		const offReconnect = onDaemonWsReconnect(() => {
 			if (id !== fetchIdRef.current) return;
-			subscribeGitStatus(workspaceId);
+			resubscribeGitStatus(workspaceId);
 		});
 
 		return () => {

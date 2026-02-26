@@ -26,33 +26,40 @@ vi.mock("../../../shared/lib/daemon/rest", () => ({
 	updateAgentSessionSettings: updateAgentSessionSettingsMock,
 }));
 
-const upsertWorkspaceSessionMock = vi.fn();
-const removeWorkspaceSessionMock = vi.fn();
-const attachWorkspaceSessionMock = vi.fn();
-const setActivePanelMock = vi.fn();
-const setWorkspaceMock = vi.fn();
-type MockAppState = {
-	upsertWorkspaceSession: typeof upsertWorkspaceSessionMock;
-	removeWorkspaceSession: typeof removeWorkspaceSessionMock;
-	attachWorkspaceSession: typeof attachWorkspaceSessionMock;
-	setActivePanel: typeof setActivePanelMock;
-	setWorkspace: typeof setWorkspaceMock;
-};
+const {
+	upsertWorkspaceSessionMock,
+	removeWorkspaceSessionMock,
+	attachWorkspaceSessionMock,
+	setActivePanelMock,
+	setWorkspaceMock,
+	setAgentLaunchOverlayMock,
+} = vi.hoisted(() => ({
+	upsertWorkspaceSessionMock: vi.fn(),
+	removeWorkspaceSessionMock: vi.fn(),
+	attachWorkspaceSessionMock: vi.fn(),
+	setActivePanelMock: vi.fn(),
+	setWorkspaceMock: vi.fn(),
+	setAgentLaunchOverlayMock: vi.fn(),
+}));
 
 vi.mock("../../../shared/stores/app-store", async () => {
 	const actual = await vi.importActual<
 		typeof import("../../../shared/stores/app-store")
 	>("../../../shared/stores/app-store");
+	const mockState = {
+		upsertWorkspaceSession: upsertWorkspaceSessionMock,
+		removeWorkspaceSession: removeWorkspaceSessionMock,
+		attachWorkspaceSession: attachWorkspaceSessionMock,
+		setActivePanel: setActivePanelMock,
+		setWorkspace: setWorkspaceMock,
+		setAgentLaunchOverlay: setAgentLaunchOverlayMock,
+	};
+	const useAppStore = (selector: (state: typeof mockState) => unknown) =>
+		selector(mockState);
+	useAppStore.getState = () => mockState;
 	return {
 		...actual,
-		useAppStore: (selector: (state: MockAppState) => unknown) =>
-			selector({
-				upsertWorkspaceSession: upsertWorkspaceSessionMock,
-				removeWorkspaceSession: removeWorkspaceSessionMock,
-				attachWorkspaceSession: attachWorkspaceSessionMock,
-				setActivePanel: setActivePanelMock,
-				setWorkspace: setWorkspaceMock,
-			}),
+		useAppStore,
 	};
 });
 

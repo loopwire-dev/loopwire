@@ -154,11 +154,27 @@ fn try_start_via_launchctl() -> anyhow::Result<bool> {
     let domain = format!("gui/{uid}");
     let label = format!("{domain}/dev.loopwire.loopwired");
 
-    let _ = std::process::Command::new("launchctl")
-        .arg("bootstrap")
-        .arg(&domain)
-        .arg(&plist)
-        .status();
+    let loaded = std::process::Command::new("launchctl")
+        .arg("print")
+        .arg(&label)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+
+    if !loaded {
+        let bootstrap_status = std::process::Command::new("launchctl")
+            .arg("bootstrap")
+            .arg(&domain)
+            .arg(&plist)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()?;
+        if !bootstrap_status.success() {
+            tracing::debug!("launchctl bootstrap did not succeed; continuing to kickstart");
+        }
+    }
 
     let status = std::process::Command::new("launchctl")
         .arg("kickstart")

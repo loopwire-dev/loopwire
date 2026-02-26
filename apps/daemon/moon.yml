@@ -22,7 +22,7 @@ tasks:
       runInCI: false
 
   dev:
-    script: 'cargo watch -x "run --bin loopwired -- start"'
+    script: 'cargo watch -x "run --bin loopwired -- run"'
     deps:
       - 'setup'
     preset: server

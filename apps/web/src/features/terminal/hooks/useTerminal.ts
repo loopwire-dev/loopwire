@@ -60,14 +60,10 @@ export function useTerminal(
 
 	const token = useAppStore((s) => s.token);
 
-	const [isLoading, setIsLoading] = useState(false);
+	const [isLoading, setIsLoading] = useState(true);
 	const [connectionError, setConnectionError] = useState<string | null>(null);
 	const [terminal, setTerminal] = useState<XTerm | null>(null);
 	const gotFirstOutputRef = useRef(false);
-
-	useEffect(() => {
-		setIsLoading(Boolean(sessionId));
-	}, [sessionId]);
 
 	const sendInput = useCallback((data: string) => {
 		return channelRef.current?.sendInputUtf8(data) ?? false;

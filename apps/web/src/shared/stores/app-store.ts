@@ -272,6 +272,10 @@ export interface AppState {
 	availableAgents: AvailableAgent[];
 	setAvailableAgents: (agents: AvailableAgent[]) => void;
 
+	// Agent launch overlay
+	agentLaunchOverlay: boolean;
+	setAgentLaunchOverlay: (v: boolean) => void;
+
 	// Editor
 	openFilePath: string | null;
 	openFileContent: string | null;
@@ -814,6 +818,9 @@ export const useAppStore = create<AppState>((set) => ({
 			sessionsByWorkspacePath: {},
 			activeSessionIdByWorkspacePath: {},
 		}),
+
+	agentLaunchOverlay: false,
+	setAgentLaunchOverlay: (v) => set({ agentLaunchOverlay: v }),
 
 	availableAgents: [],
 	setAvailableAgents: (agents) => set({ availableAgents: agents }),

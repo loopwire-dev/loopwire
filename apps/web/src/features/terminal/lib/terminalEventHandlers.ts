@@ -1,3 +1,5 @@
+import { stopAgentSession } from "../../../shared/lib/daemon/rest";
+import { useAppStore } from "../../../shared/stores/app-store";
 import type { TerminalOutputKind } from "../channel/TerminalChannel";
 import type { TerminalPagingController } from "../channel/TerminalPagingController";
 
@@ -120,19 +122,21 @@ export function createTerminalChannelHandlers(params: ChannelHandlersParams) {
 			if (!gotFirstOutputRef.current) {
 				gotFirstOutputRef.current = true;
 				setIsLoading(false);
+				useAppStore.getState().setAgentLaunchOverlay(false);
 			}
 			paging.checkSequence(meta.seq);
 			paging.processFrame(kind, bytes);
 		},
-		onExit: (exitCode: number | null) => {
+		onExit: (_exitCode: number | null) => {
 			setIsLoading(false);
-			setConnectionError(
-				`Process exited${exitCode != null ? ` (code ${exitCode})` : ""}.`,
-			);
+			useAppStore.getState().setAgentLaunchOverlay(false);
+			useAppStore.getState().removeSessionById(sessionId);
+			stopAgentSession(sessionId).catch(() => {});
 		},
 		onError: (message: string) => {
 			paging.reset();
 			setIsLoading(false);
+			useAppStore.getState().setAgentLaunchOverlay(false);
 			setConnectionError(message);
 			console.warn("[terminal] channel error:", message);
 			terminal.writeln(`\r\n[terminal] ${message}`);

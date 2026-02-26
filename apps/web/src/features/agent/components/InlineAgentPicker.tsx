@@ -1,7 +1,6 @@
 import { Bot, ExternalLink, Play } from "lucide-react";
 import { useState } from "react";
 import { useAppStore } from "../../../shared/stores/app-store";
-import { LoopwireSpinner } from "../../../shared/ui/LoopwireSpinner";
 import { useAgent } from "../hooks/useAgent";
 import { getAgentIcon } from "../lib/agentIcons";
 
@@ -17,13 +16,11 @@ export function InlineAgentPicker() {
 	const [selectedAgent, setSelectedAgent] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [starting, setStarting] = useState(false);
-	const [startingAgent, setStartingAgent] = useState<string | null>(null);
 	const workspacePath = useAppStore((s) => s.workspacePath);
 
 	const handleStart = async (agentType: string) => {
 		if (!workspacePath || starting) return;
 		setError(null);
-		setStartingAgent(agentType);
 		setStarting(true);
 		try {
 			await startSession(agentType, workspacePath);
@@ -31,7 +28,6 @@ export function InlineAgentPicker() {
 			setError(err instanceof Error ? err.message : "Failed to start session");
 		} finally {
 			setStarting(false);
-			setStartingAgent(null);
 		}
 	};
 
@@ -120,15 +116,6 @@ export function InlineAgentPicker() {
 										{!a.installed && a.agent_type === "gemini" && (
 											<span className="ml-auto text-muted" aria-hidden="true">
 												<ExternalLink size={14} />
-											</span>
-										)}
-										{starting && startingAgent === a.agent_type && (
-											<span className="ml-auto text-accent" aria-hidden="true">
-												<LoopwireSpinner
-													size={14}
-													decorative
-													className="opacity-90"
-												/>
 											</span>
 										)}
 										{a.installed &&

@@ -15,6 +15,8 @@ export interface GitStatusEventPayload {
 	ignored_dirs: string[];
 }
 
+const gitSubscriptionRefs = new Map<string, number>();
+
 /** Opens the authenticated daemon WS channel. */
 export function daemonWsConnect() {
 	wsClient.connect();
@@ -23,6 +25,7 @@ export function daemonWsConnect() {
 /** Closes the daemon WS channel and clears pending reconnects. */
 export function daemonWsDisconnect() {
 	wsClient.disconnect();
+	gitSubscriptionRefs.clear();
 }
 
 /** Registers a callback fired whenever the WS client reconnects. */
@@ -56,11 +59,27 @@ export function onAgentActivityEvent(
 
 /** Sends a `git:subscribe` command for a workspace. */
 export function subscribeGitStatus(workspaceId: string) {
+	const refs = gitSubscriptionRefs.get(workspaceId) ?? 0;
+	gitSubscriptionRefs.set(workspaceId, refs + 1);
+	if (refs > 0) return;
+	wsClient.send("git:subscribe", { workspace_id: workspaceId });
+}
+
+/** Re-sends `git:subscribe` without changing local subscriber refcounts. */
+export function resubscribeGitStatus(workspaceId: string) {
+	if ((gitSubscriptionRefs.get(workspaceId) ?? 0) <= 0) return;
 	wsClient.send("git:subscribe", { workspace_id: workspaceId });
 }
 
 /** Sends a `git:unsubscribe` command for a workspace. */
 export function unsubscribeGitStatus(workspaceId: string) {
+	const refs = gitSubscriptionRefs.get(workspaceId) ?? 0;
+	if (refs <= 1) {
+		gitSubscriptionRefs.delete(workspaceId);
+	} else {
+		gitSubscriptionRefs.set(workspaceId, refs - 1);
+		return;
+	}
 	wsClient.send(
 		"git:unsubscribe",
 		{ workspace_id: workspaceId },
