@@ -80,7 +80,8 @@ describe("InlineAgentPicker", () => {
 		useStateMock
 			.mockReturnValueOnce(["", vi.fn()])
 			.mockReturnValueOnce([null, vi.fn()])
-			.mockReturnValueOnce([false, vi.fn()]);
+			.mockReturnValueOnce([false, vi.fn()])
+			.mockReturnValueOnce([null, vi.fn()]);
 		const state = {
 			availableAgents: [],
 			workspacePath: "/repo",
@@ -101,7 +102,8 @@ describe("InlineAgentPicker", () => {
 		useStateMock
 			.mockReturnValueOnce(["codex", vi.fn()])
 			.mockReturnValueOnce([null, setError])
-			.mockReturnValueOnce([false, vi.fn()]);
+			.mockReturnValueOnce([false, vi.fn()])
+			.mockReturnValueOnce([null, vi.fn()]);
 		const state = {
 			availableAgents: [
 				{
