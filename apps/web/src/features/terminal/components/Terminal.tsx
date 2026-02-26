@@ -31,6 +31,7 @@ export function Terminal({ sessionId }: TerminalProps) {
 		termTheme,
 		useCallback(() => setShowScrollback(true), []),
 	);
+	const agentLaunchOverlay = useAppStore((s) => s.agentLaunchOverlay);
 	const [isDragOver, setIsDragOver] = useState(false);
 	const containerRef = useRef<HTMLDivElement>(null);
 
@@ -122,8 +123,8 @@ export function Terminal({ sessionId }: TerminalProps) {
 			onDragLeave={handleDragLeave}
 			onDrop={handleDrop}
 		>
-			{isLoading && (
-				<div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-surface/70">
+			{isLoading && !agentLaunchOverlay && (
+				<div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-surface">
 					<LoopwireSpinner size={26} label="Loading terminal" />
 					<p className="text-xs text-muted">Getting things ready...</p>
 				</div>

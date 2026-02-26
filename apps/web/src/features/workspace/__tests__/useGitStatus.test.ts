@@ -8,6 +8,7 @@ const {
 	gitStatusMock,
 	isNotGitRepoErrorMock,
 	subscribeGitStatusMock,
+	resubscribeGitStatusMock,
 	unsubscribeGitStatusMock,
 	onGitStatusEventMock,
 	onDaemonWsReconnectMock,
@@ -19,6 +20,7 @@ const {
 	gitStatusMock: vi.fn(),
 	isNotGitRepoErrorMock: vi.fn(),
 	subscribeGitStatusMock: vi.fn(),
+	resubscribeGitStatusMock: vi.fn(),
 	unsubscribeGitStatusMock: vi.fn(),
 	onGitStatusEventMock: vi.fn(),
 	onDaemonWsReconnectMock: vi.fn(),
@@ -38,6 +40,7 @@ vi.mock("../../../shared/lib/daemon/rest", () => ({
 
 vi.mock("../../../shared/lib/daemon/ws", () => ({
 	subscribeGitStatus: subscribeGitStatusMock,
+	resubscribeGitStatus: resubscribeGitStatusMock,
 	unsubscribeGitStatus: unsubscribeGitStatusMock,
 	onGitStatusEvent: onGitStatusEventMock,
 	onDaemonWsReconnect: onDaemonWsReconnectMock,
@@ -70,6 +73,7 @@ describe("useGitStatus", () => {
 		gitStatusMock.mockReset();
 		isNotGitRepoErrorMock.mockReset();
 		subscribeGitStatusMock.mockReset();
+		resubscribeGitStatusMock.mockReset();
 		unsubscribeGitStatusMock.mockReset();
 		onGitStatusEventMock.mockReset();
 		onDaemonWsReconnectMock.mockReset();
@@ -123,7 +127,8 @@ describe("useGitStatus", () => {
 
 		if (!reconnectHandler) throw new Error("missing reconnect handler");
 		(reconnectHandler as () => void)();
-		expect(subscribeGitStatusMock).toHaveBeenCalledTimes(2);
+		expect(subscribeGitStatusMock).toHaveBeenCalledTimes(1);
+		expect(resubscribeGitStatusMock).toHaveBeenCalledWith("w1");
 
 		// cleanup returned by effect mock
 		const cleanup = useEffectMock.mock.results.at(-1)?.value as () => void;

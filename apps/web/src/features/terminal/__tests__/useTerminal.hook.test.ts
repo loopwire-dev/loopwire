@@ -54,11 +54,11 @@ describe("useTerminal hook shell", () => {
 		);
 	});
 
-	it("sets loading from sessionId and returns false sendInput when no channel", async () => {
+	it("initialises loading as true and returns false sendInput when no channel", async () => {
 		const setLoading = vi.fn();
 		const setConnectionError = vi.fn();
 		useStateMock
-			.mockReturnValueOnce([false, setLoading])
+			.mockReturnValueOnce([true, setLoading])
 			.mockReturnValueOnce([null, setConnectionError])
 			.mockReturnValueOnce([null, vi.fn()]);
 
@@ -79,7 +79,7 @@ describe("useTerminal hook shell", () => {
 
 		const { useTerminal } = await import("../hooks/useTerminal");
 		const hook = useTerminal("sess-1", "dark");
-		expect(setLoading).toHaveBeenCalledWith(true);
+		expect(hook.isLoading).toBe(true);
 		expect(hook.sendInput("x")).toBe(false);
 	});
 
@@ -96,7 +96,7 @@ describe("useTerminal hook shell", () => {
 		};
 
 		useStateMock
-			.mockReturnValueOnce([false, setLoading])
+			.mockReturnValueOnce([true, setLoading])
 			.mockReturnValueOnce([null, setConnectionError])
 			.mockReturnValueOnce([terminal, vi.fn()]);
 

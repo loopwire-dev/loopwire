@@ -1,4 +1,28 @@
 import { describe, expect, it, vi } from "vitest";
+
+const {
+	removeSessionByIdMock,
+	setAgentLaunchOverlayMock,
+	stopAgentSessionMock,
+} = vi.hoisted(() => ({
+	removeSessionByIdMock: vi.fn(),
+	setAgentLaunchOverlayMock: vi.fn(),
+	stopAgentSessionMock: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("../../../shared/stores/app-store", () => ({
+	useAppStore: Object.assign(() => {}, {
+		getState: () => ({
+			setAgentLaunchOverlay: setAgentLaunchOverlayMock,
+			removeSessionById: removeSessionByIdMock,
+		}),
+	}),
+}));
+
+vi.mock("../../../shared/lib/daemon/rest", () => ({
+	stopAgentSession: stopAgentSessionMock,
+}));
+
 import {
 	createTerminalChannelHandlers,
 	createTerminalWheelHandler,
@@ -124,7 +148,8 @@ describe("terminalEventHandlers channel handlers", () => {
 		);
 
 		handlers.onExit(9);
-		expect(setConnectionError).toHaveBeenCalledWith("Process exited (code 9).");
+		expect(removeSessionByIdMock).toHaveBeenCalledWith("s1");
+		expect(stopAgentSessionMock).toHaveBeenCalledWith("s1");
 
 		handlers.onError("boom");
 		expect(paging.reset).toHaveBeenCalledTimes(3);

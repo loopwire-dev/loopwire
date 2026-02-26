@@ -4,6 +4,7 @@ import {
 	useAppStore,
 	workspaceStoreKeyForSelection,
 } from "../../../shared/stores/app-store";
+import { LoopwireSpinner } from "../../../shared/ui/LoopwireSpinner";
 import { InlineAgentPicker } from "../../agent/components/InlineAgentPicker";
 import { Terminal } from "../../terminal/components/Terminal";
 import { FilesPanelView } from "./FilesPanelView";
@@ -13,6 +14,7 @@ import { WorkspaceSidebar } from "./WorkspaceSidebar";
 export function WorkspaceView() {
 	const workspacePath = useAppStore((s) => s.workspacePath);
 	const workspaceId = useAppStore((s) => s.workspaceId);
+	const agentLaunchOverlay = useAppStore((s) => s.agentLaunchOverlay);
 	const sessionsByWorkspacePath = useAppStore((s) => s.sessionsByWorkspacePath);
 	const activePanelByWorkspacePath = useAppStore(
 		(s) => s.activePanelByWorkspacePath,
@@ -102,7 +104,15 @@ export function WorkspaceView() {
 		<div className="h-full flex">
 			<WorkspaceSidebar sessions={sessions} activePanel={activePanel} />
 			<div className="w-px bg-border shrink-0" />
-			<div className="flex-1 min-w-0 overflow-hidden">{content}</div>
+			<div className="flex-1 min-w-0 overflow-hidden relative">
+				{agentLaunchOverlay && (
+					<div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-surface">
+						<LoopwireSpinner size={26} label="Loading terminal" />
+						<p className="text-xs text-muted">Getting things ready...</p>
+					</div>
+				)}
+				{content}
+			</div>
 		</div>
 	);
 }

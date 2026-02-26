@@ -51,6 +51,7 @@ export function useAgent() {
 	const startSession = useCallback(
 		async (agentType: string, workspacePath: string) => {
 			setLoading(true);
+			useAppStore.getState().setAgentLaunchOverlay(true);
 			try {
 				const res = await startAgentSession(agentType, workspacePath);
 
@@ -70,6 +71,9 @@ export function useAgent() {
 				});
 				setWorkspace(workspacePath, res.workspace_id);
 				return res;
+			} catch (err) {
+				useAppStore.getState().setAgentLaunchOverlay(false);
+				throw err;
 			} finally {
 				setLoading(false);
 			}

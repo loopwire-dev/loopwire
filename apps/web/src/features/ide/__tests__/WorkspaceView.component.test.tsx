@@ -73,6 +73,15 @@ describe("WorkspaceView", () => {
 		useMemoMock.mockImplementation((factory: () => unknown) => factory());
 	});
 
+	/** Helper: extract the visible content panel from WorkspaceView's tree.
+	 *  The content wrapper now holds [overlay | false, content]. */
+	// biome-ignore lint/suspicious/noExplicitAny: test helper
+	function extractContent(tree: any) {
+		const children = tree.props.children[2].props.children;
+		// children is [agentLaunchOverlay element | false, content]
+		return Array.isArray(children) ? children[1] : children;
+	}
+
 	it("renders files panel by default", async () => {
 		const state = {
 			workspacePath: "/repo",
@@ -81,6 +90,7 @@ describe("WorkspaceView", () => {
 				key1: [],
 			},
 			activePanelByWorkspacePath: {},
+			agentLaunchOverlay: false,
 			setActivePanel: vi.fn(),
 		};
 		useAppStoreMock.mockImplementation(
@@ -90,7 +100,7 @@ describe("WorkspaceView", () => {
 
 		const { WorkspaceView } = await import("../components/WorkspaceView");
 		const tree = WorkspaceView();
-		const content = tree.props.children[2].props.children;
+		const content = extractContent(tree);
 
 		expect(content.type).toBe(FilesPanelViewMock);
 	});
@@ -105,6 +115,7 @@ describe("WorkspaceView", () => {
 			activePanelByWorkspacePath: {
 				key1: { kind: "panel", panel: "git" },
 			},
+			agentLaunchOverlay: false,
 			setActivePanel: vi.fn(),
 		};
 		useAppStoreMock.mockImplementation(
@@ -114,7 +125,7 @@ describe("WorkspaceView", () => {
 
 		const { WorkspaceView } = await import("../components/WorkspaceView");
 		const tree = WorkspaceView();
-		const content = tree.props.children[2].props.children;
+		const content = extractContent(tree);
 
 		expect(content.type).toBe(GitPanelViewMock);
 	});
@@ -131,6 +142,7 @@ describe("WorkspaceView", () => {
 			activePanelByWorkspacePath: {
 				key1: { kind: "agent", sessionId: "s1" },
 			},
+			agentLaunchOverlay: false,
 			setActivePanel: vi.fn(),
 		};
 		useAppStoreMock.mockImplementation(
@@ -140,7 +152,7 @@ describe("WorkspaceView", () => {
 
 		const { WorkspaceView } = await import("../components/WorkspaceView");
 		const tree = WorkspaceView();
-		const content = tree.props.children[2].props.children;
+		const content = extractContent(tree);
 
 		expect(content.type).toBe(TerminalMock);
 		expect(content.props.sessionId).toBe("s1");
@@ -156,6 +168,7 @@ describe("WorkspaceView", () => {
 			activePanelByWorkspacePath: {
 				key1: { kind: "agent", sessionId: "missing" },
 			},
+			agentLaunchOverlay: false,
 			setActivePanel: vi.fn(),
 		};
 		useAppStoreMock.mockImplementation(
@@ -165,7 +178,7 @@ describe("WorkspaceView", () => {
 
 		const { WorkspaceView } = await import("../components/WorkspaceView");
 		const tree = WorkspaceView();
-		const content = tree.props.children[2].props.children;
+		const content = extractContent(tree);
 
 		expect(content.type).toBe(FilesPanelViewMock);
 	});

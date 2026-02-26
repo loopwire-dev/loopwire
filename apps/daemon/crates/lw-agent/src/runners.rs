@@ -1,6 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
+use std::process::{Command, Output, Stdio};
+use std::sync::{OnceLock, RwLock};
+use std::thread;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
@@ -116,17 +120,124 @@ fn parse_command_path_from_shell_output(stdout: &str) -> Option<String> {
     None
 }
 
+const SHELL_PROBE_TIMEOUT: Duration = Duration::from_secs(3);
+const COMMAND_PATH_CACHE_TTL: Duration = Duration::from_secs(60);
+
+#[derive(Clone)]
+struct CommandPathCacheEntry {
+    resolved_path: Option<String>,
+    at: Instant,
+}
+
+fn command_path_cache() -> &'static RwLock<HashMap<String, CommandPathCacheEntry>> {
+    static CACHE: OnceLock<RwLock<HashMap<String, CommandPathCacheEntry>>> = OnceLock::new();
+    CACHE.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+fn is_executable_file(path: &Path) -> bool {
+    if !path.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        path.metadata()
+            .ok()
+            .is_some_and(|m| (m.permissions().mode() & 0o111) != 0)
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
+}
+
+fn lookup_binary_in_path(binary: &str, path_var: &str) -> Option<String> {
+    let path_dirs = std::env::split_paths(path_var);
+    for dir in path_dirs {
+        let candidate = dir.join(binary);
+        if is_executable_file(&candidate) {
+            return Some(candidate.to_string_lossy().to_string());
+        }
+        #[cfg(windows)]
+        {
+            for ext in [".exe", ".bat", ".cmd"] {
+                let candidate_with_ext = dir.join(format!("{binary}{ext}"));
+                if is_executable_file(&candidate_with_ext) {
+                    return Some(candidate_with_ext.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
+fn run_shell_probe(shell: &str, command: &str) -> Option<Output> {
+    let mut child = Command::new(shell)
+        .args(interactive_login_args())
+        .arg(command)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .ok()?;
+
+    let deadline = Instant::now() + SHELL_PROBE_TIMEOUT;
+    loop {
+        match child.try_wait().ok()? {
+            Some(_) => return child.wait_with_output().ok(),
+            None => {
+                if Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return None;
+                }
+                thread::sleep(Duration::from_millis(25));
+            }
+        }
+    }
+}
+
+fn run_command_with_timeout(program: &str, args: &[&str], timeout: Duration) -> Option<Output> {
+    let mut child = Command::new(program)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .ok()?;
+
+    let deadline = Instant::now() + timeout;
+    loop {
+        match child.try_wait().ok()? {
+            Some(_) => return child.wait_with_output().ok(),
+            None => {
+                if Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return None;
+                }
+                thread::sleep(Duration::from_millis(25));
+            }
+        }
+    }
+}
+
 pub fn detect_version_from_command(binary: &str, args: &[&str]) -> Option<String> {
+    if let Some(command_path) = resolve_command_path(binary) {
+        if let Some(output) = run_command_with_timeout(&command_path, args, SHELL_PROBE_TIMEOUT) {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                return Some(extract_version(&stdout));
+            }
+        }
+    }
+
     let full_cmd = std::iter::once(binary)
         .chain(args.iter().copied())
         .collect::<Vec<_>>()
         .join(" ");
     candidate_login_shells().iter().find_map(|shell| {
-        std::process::Command::new(shell)
-            .args(interactive_login_args())
-            .arg(&full_cmd)
-            .output()
-            .ok()
+        run_shell_probe(shell, &full_cmd)
             .filter(|o| o.status.success())
             .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
             .map(|s| extract_version(&s))
@@ -140,11 +251,7 @@ pub fn detect_version_from_command(binary: &str, args: &[&str]) -> Option<String
 /// by launchd with a sparse environment.
 pub fn resolve_login_shell_path() -> Option<String> {
     candidate_login_shells().iter().find_map(|shell| {
-        std::process::Command::new(shell)
-            .args(interactive_login_args())
-            .arg("printenv PATH")
-            .output()
-            .ok()
+        run_shell_probe(shell, "printenv PATH")
             .filter(|o| o.status.success())
             .and_then(|o| parse_path_from_shell_output(&String::from_utf8_lossy(&o.stdout)))
     })
@@ -155,16 +262,69 @@ pub fn resolve_login_shell_path() -> Option<String> {
 /// shell-search strategy used by `is_command_available` so detection and
 /// spawn use the same PATH.
 pub fn resolve_command_path(binary: &str) -> Option<String> {
+    if let Some(entry) = command_path_cache()
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(binary)
+        .cloned()
+    {
+        if entry.at.elapsed() < COMMAND_PATH_CACHE_TTL {
+            return entry.resolved_path;
+        }
+    }
+
+    if let Ok(path_var) = std::env::var("PATH") {
+        if let Some(path) = lookup_binary_in_path(binary, &path_var) {
+            command_path_cache()
+                .write()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(
+                    binary.to_string(),
+                    CommandPathCacheEntry {
+                        resolved_path: Some(path.clone()),
+                        at: Instant::now(),
+                    },
+                );
+            return Some(path);
+        }
+    }
+
+    let login_shell_path = resolve_login_shell_path();
+    if let Some(shell_path) = login_shell_path {
+        if let Some(path) = lookup_binary_in_path(binary, &shell_path) {
+            command_path_cache()
+                .write()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(
+                    binary.to_string(),
+                    CommandPathCacheEntry {
+                        resolved_path: Some(path.clone()),
+                        at: Instant::now(),
+                    },
+                );
+            return Some(path);
+        }
+    }
+
     let cmd = format!("command -v -- {binary}");
-    candidate_login_shells().iter().find_map(|shell| {
-        std::process::Command::new(shell)
-            .args(interactive_login_args())
-            .arg(&cmd)
-            .output()
-            .ok()
+    let resolved = candidate_login_shells().iter().find_map(|shell| {
+        run_shell_probe(shell, &cmd)
             .filter(|o| o.status.success())
             .and_then(|o| parse_command_path_from_shell_output(&String::from_utf8_lossy(&o.stdout)))
-    })
+    });
+
+    command_path_cache()
+        .write()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(
+            binary.to_string(),
+            CommandPathCacheEntry {
+                resolved_path: resolved.clone(),
+                at: Instant::now(),
+            },
+        );
+
+    resolved
 }
 
 pub fn is_command_available(binary: &str) -> bool {
@@ -415,21 +575,39 @@ mod tests {
         assert_eq!(types.len(), 3);
     }
 
-    // ── Macro-generated is_installed / detect_version ─────────────────
-    // These tests just invoke the trait methods; we don't assert specific
-    // values because the result depends on what's installed in the environment.
-
     #[test]
-    fn runner_is_installed_does_not_panic() {
-        let _ = ClaudeCodeRunner.is_installed();
-        let _ = CodexRunner.is_installed();
-        let _ = GeminiRunner.is_installed();
+    fn lookup_binary_in_path_finds_executable_in_given_path() {
+        let dir = std::env::temp_dir().join(format!("lw-agent-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let bin = dir.join("fake-agent");
+        std::fs::write(&bin, "#!/bin/sh\necho ok\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&bin).unwrap().permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&bin, perms).unwrap();
+        }
+
+        let path_var = dir.to_string_lossy().to_string();
+        let resolved = lookup_binary_in_path("fake-agent", &path_var);
+        assert_eq!(resolved, Some(bin.to_string_lossy().to_string()));
+        let _ = std::fs::remove_file(&bin);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
-    fn runner_detect_version_does_not_panic() {
-        let _ = ClaudeCodeRunner.detect_version();
-        let _ = CodexRunner.detect_version();
-        let _ = GeminiRunner.detect_version();
+    fn run_command_with_timeout_returns_output_for_fast_command() {
+        let output = run_command_with_timeout("sh", &["-c", "echo 1.2.3"], Duration::from_secs(1));
+        assert!(output.is_some());
+        let output = output.unwrap();
+        assert!(output.status.success());
+        assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "1.2.3");
+    }
+
+    #[test]
+    fn run_command_with_timeout_kills_slow_command() {
+        let output = run_command_with_timeout("sh", &["-c", "sleep 5"], Duration::from_millis(50));
+        assert!(output.is_none());
     }
 }

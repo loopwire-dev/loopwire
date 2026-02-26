@@ -188,6 +188,8 @@ impl ActivityRecorder {
                                 {
                                     let mut w = handles.write().await;
                                     if let Some(handle) = w.get_mut(&session_id) {
+                                        handle.status = super::session::AgentStatus::Stopped;
+                                        handle.process_id = None;
                                         // If the session was still Restored when
                                         // the process exited, the resume attempt
                                         // failed.  Mark as unresumable so the
